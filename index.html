@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07060c" />
+    <title>Pixel Atlas · 像素图鉴</title>
+    <meta name="description" content="140 万张 16×16 像素素材，以及关于像素风格的一切。" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="gl" aria-hidden="true"></canvas>
+
+      <header class="hud hud-top">
+        <a class="logo" href="#hero" data-goto="hero">PIXEL<span>·</span>ATLAS</a>
+        <div class="hud-chapter"><span class="hud-num">01</span><span class="hud-title">开场</span></div>
+      </header>
+
+      <nav class="pips" aria-label="章节"></nav>
+
+      <footer class="hud hud-bottom">
+        <span class="hint"><kbd>滚轮</kbd><kbd>↑↓</kbd><kbd>滑动</kbd> 翻页</span>
+        <button class="map-btn" type="button"><kbd>M</kbd> 关卡地图</button>
+      </footer>
+
+      <main id="stage">
+        <!-- 00 HERO -->
+        <section class="chapter ch-hero" data-id="hero" aria-label="开场">
+          <div class="hero-title" data-hero="title">
+            <p class="eyebrow">VOL.1 · CC0 · AI-GENERATED</p>
+            <h1>PIXEL<br />ATLAS</h1>
+            <p class="hero-sub"><b class="count">1,409,404</b> 张 16×16 像素素材</p>
+          </div>
+          <div class="hero-note" data-hero="mid">
+            <p class="pix">这不是一颗星球。</p>
+            <p>每一个点，都是一张素材的平均色。灰色沉在核心，彩色按色相绕成光环——暖色占了大半圈，因为游戏世界里木头、皮革、火光最多。</p>
+          </div>
+          <div class="hero-end" data-hero="end">
+            <p class="pix tag">#<span data-target-id></span></p>
+            <p class="pix big" data-target-caption></p>
+            <p>16 × 16 = 256 个格子。一切从这里开始。</p>
+          </div>
+          <div class="scroll-cue" data-hero="cue"><span class="pix">向下潜入</span><i></i></div>
+        </section>
+
+        <!-- 01 DEPTH -->
+        <section class="chapter ch-depth" data-id="depth" aria-label="色深">
+          <div class="depth-copy">
+            <p class="eyebrow pix">CHAPTER 01 · COLOR DEPTH</p>
+            <h2 class="pix">色深</h2>
+            <p class="depth-stage-name pix"></p>
+            <p class="depth-stage-desc"></p>
+            <ol class="depth-steps"></ol>
+            <label class="toggle"><input type="checkbox" class="dither-toggle" /> <span class="pix">有序抖动</span></label>
+          </div>
+          <div class="depth-board">
+            <canvas class="depth-canvas" width="768" height="576"></canvas>
+            <div class="depth-palette"></div>
+          </div>
+        </section>
+
+        <!-- 02 DUNGEON -->
+        <section class="chapter ch-dungeon" data-id="dungeon" aria-label="地牢">
+          <div class="dungeon-floor"></div>
+          <canvas class="dungeon-dark"></canvas>
+          <div class="dungeon-copy">
+            <p class="eyebrow pix">CHAPTER 02 · DUNGEON</p>
+            <h2 class="pix">地牢</h2>
+            <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>，光源越少，玩家越想往前走。</p>
+            <p class="dim pix">移动鼠标：你就是火把</p>
+          </div>
+          <div class="dungeon-tip pix" role="status"></div>
+        </section>
+
+        <!-- 03 CTHULHU -->
+        <section class="chapter ch-cthulhu" data-id="cthulhu" aria-label="克苏鲁">
+          <svg class="defs" width="0" height="0" aria-hidden="true">
+            <filter id="madness">
+              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="2" seed="3" result="n" />
+              <feDisplacementMap in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </svg>
+          <div class="cth-field"></div>
+          <div class="cth-copy">
+            <p class="eyebrow pix">CHAPTER 03 · COSMIC HORROR</p>
+            <h2 class="pix glitch" data-text="不可名状">不可名状</h2>
+            <p class="cth-text" data-src="克苏鲁风格从不把怪物画清楚。低饱和的墨绿与淤紫、不对称的轮廓、太多的眼睛——16×16 的模糊恰好替你留白，剩下的交给玩家的想象。"></p>
+            <div class="san"><span class="pix">SAN</span><div class="san-bar"><i></i></div><b class="pix san-num">100</b></div>
+            <p class="dim pix cth-hint">继续向下……如果你确定的话</p>
+          </div>
+        </section>
+
+        <!-- 04 OUTRO -->
+        <section class="chapter ch-outro" data-id="outro" aria-label="素材库">
+          <div class="outro-rain"></div>
+          <div class="outro-box">
+            <p class="eyebrow pix">NEXT STAGE</p>
+            <h2 class="pix">素材库</h2>
+            <p>140 万张素材，按名字、颜色、题材搜索；一键放大导出，打包成精灵表。</p>
+            <div class="search-fake pix"><span>&gt; 搜索 slime / 宝箱 / 克苏鲁…</span><i></i></div>
+            <p class="dim pix">建设中 · 原型 v0</p>
+          </div>
+        </section>
+      </main>
+
+      <canvas id="fx" aria-hidden="true"></canvas>
+      <div class="slash" aria-hidden="true"><i></i></div>
+
+      <div class="map" hidden>
+        <div class="map-inner">
+          <p class="eyebrow pix">WORLD MAP · 选择关卡</p>
+          <ol class="map-list"></ol>
+          <p class="dim pix">ESC 关闭</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
