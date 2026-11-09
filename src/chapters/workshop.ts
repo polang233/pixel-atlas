@@ -1,0 +1,877 @@
+/**
+ * 03 · 像素工坊. One sprite, six small pixel tools — every one of them runs
+ * live on the 16×16 data, so playing with them *is* the explanation.
+ */
+import gsap from 'gsap'
+import { sound } from '../audio'
+import { hueToward, lchToRgb, rgbToLch, type RGB } from '../color'
+import type { Sprite } from '../sprites'
+import type { Chapter } from '../types'
+import { reducedMotion } from '../types'
+
+const N = 20 // working buffer: 16×16 sprite + 2 px padding for outlines/glow
+const PAD = 2
+const SCALE = 16
+type Buf = Uint8ClampedArray
+type ToolId = 'light' | 'outline' | 'swap' | 'scale' | 'rotate' | 'juice'
+
+const TOOLS: { id: ToolId; name: string; desc: string }[] = [
+  {
+    id: 'light',
+    name: '高光',
+    desc: '鼠标放到画布上，你就是光源。程序从轮廓猜出凹凸（离边缘越远越“鼓”），算出每个像素朝向光的程度，再把结果量化回几级色阶：阴影偏冷、高光偏暖，这叫色相偏移。关掉量化看看——平滑的明暗一下子就不像像素画了。',
+  },
+  {
+    id: 'outline',
+    name: '描边',
+    desc: '同一张图，换一种描边就换了一种年代感。纯黑外描边最复古；选择性描边用旁边颜色的暗调代替黑色，是现代像素画的主流；外发光常用来标记能捡的道具。',
+  },
+  {
+    id: 'swap',
+    name: '换色',
+    desc: '游戏里的“换色怪”：同一张图只改色相，就是一只新敌人。左右拖动画布可以连续换色；下面六套是预设。明度没变，所以轮廓和体积都还在。',
+  },
+  {
+    id: 'scale',
+    name: '放大',
+    desc: '像素画放大只能用最近邻，或者专门的像素算法。双线性会把硬边糊成一片；Scale2x（又叫 EPX）会在斜线上补出新像素，45° 边变平滑，而且一种新颜色都不加。',
+  },
+  {
+    id: 'rotate',
+    name: '旋转',
+    desc: '直接旋转像素图会断线、丢像素。RotSprite 的做法是先用 Scale2x 放大 8 倍，在大图上旋转，再缩回原尺寸——线条连贯得多。左右拖动画布改变角度。',
+  },
+  {
+    id: 'juice',
+    name: '打击感',
+    desc: '点画布打它。顿帧、闪白、震屏、击退、粒子、飘字、音效，每一项都只占几帧。关掉任意一项再打几下，感受少了什么。',
+  },
+]
+
+const VARIANTS = [
+  { name: '原版' },
+  { name: '冰霜', h: 228, c: 0.9, l: 0.04 },
+  { name: '剧毒', h: 138, c: 1.05, l: 0 },
+  { name: '烈焰', h: 36, c: 1.2, l: 0.02 },
+  { name: '暗影', h: 296, c: 0.55, l: -0.12 },
+  { name: '黄金', h: 86, c: 1.1, l: 0.05 },
+] as { name: string; h?: number; c?: number; l?: number }[]
+
+const pack = (b: Buf, i: number) => (b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]
+
+function scale2x(src: Buf, n: number): Buf {
+  const m = n * 2
+  const out = new Uint8ClampedArray(m * m * 4)
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= n || y >= n ? 0 : pack(src, (y * n + x) * 4))
+  const put = (x: number, y: number, v: number) => {
+    const o = (y * m + x) * 4
+    out[o] = v >>> 24
+    out[o + 1] = (v >>> 16) & 255
+    out[o + 2] = (v >>> 8) & 255
+    out[o + 3] = v & 255
+  }
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const P = at(x, y)
+      const A = at(x, y - 1)
+      const B = at(x + 1, y)
+      const C = at(x - 1, y)
+      const D = at(x, y + 1)
+      put(x * 2, y * 2, C === A && C !== D && A !== B ? A : P)
+      put(x * 2 + 1, y * 2, A === B && A !== C && B !== D ? B : P)
+      put(x * 2, y * 2 + 1, D === C && D !== B && C !== A ? C : P)
+      put(x * 2 + 1, y * 2 + 1, B === D && B !== A && D !== C ? D : P)
+    }
+  return out
+}
+
+export interface Workshop extends Chapter {
+  load(sprite: HTMLCanvasElement | ImageData, label: string): void
+}
+
+export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
+  const $ = <T extends HTMLElement>(s: string) => el.querySelector<T>(s)!
+  const main = $<HTMLCanvasElement>('.ws-main')
+  const fxc = $<HTMLCanvasElement>('.ws-fx')
+  const mctx = main.getContext('2d')!
+  const fctx = fxc.getContext('2d')!
+  const stageEl = $('.ws-stage')
+  const sun = $('.ws-sun')
+  const extra = $('.ws-extra')
+  const nameEl = $('.ws-tool-name')
+  const descEl = $('.ws-tool-desc')
+  const controls = $('.ws-controls')
+  const stat = $('.ws-stat')
+  const trayEl = $('.ws-tray')
+  const toolNav = $('.ws-tools')
+  const labelEl = $('.ws-label')
+
+  main.width = main.height = N * SCALE
+  fxc.width = fxc.height = N * SCALE
+  const off = document.createElement('canvas')
+  const octx = off.getContext('2d')!
+
+  let base: Buf = new Uint8ClampedArray(N * N * 4)
+  let baseColors = 0
+  const height = new Float32Array(N * N)
+  const normal = new Float32Array(N * N * 3)
+  let tool: ToolId = 'light'
+  let out: Buf = base
+  let active = false
+  let raf = 0
+
+  const st = {
+    lx: 4,
+    ly: 3,
+    lz: 7,
+    hueShift: true,
+    smooth: false,
+    lightAuto: true,
+    outline: 'selout',
+    shadow: false,
+    hue: 0,
+    variant: 0,
+    angle: 0.5,
+    rotAuto: true,
+    juice: { stop: true, flash: true, shake: true, knock: true, particles: true, number: true, sound: true },
+  }
+
+  // ---- sprite loading -----------------------------------------------------------------
+  function load(src: HTMLCanvasElement | ImageData, label: string) {
+    let data: ImageData
+    if (src instanceof ImageData) data = src
+    else data = src.getContext('2d')!.getImageData(0, 0, 16, 16)
+    base = new Uint8ClampedArray(N * N * 4)
+    const colors = new Set<number>()
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        const s = (y * 16 + x) * 4
+        const d = ((y + PAD) * N + x + PAD) * 4
+        if (data.data[s + 3] < 128) continue
+        base[d] = data.data[s]
+        base[d + 1] = data.data[s + 1]
+        base[d + 2] = data.data[s + 2]
+        base[d + 3] = 255
+        colors.add(pack(base, d))
+      }
+    baseColors = colors.size
+    labelEl.textContent = label
+    computeHeight()
+    render()
+    if (tool === 'swap') renderVariants()
+  }
+
+  function computeHeight() {
+    const dist = new Float32Array(N * N)
+    for (let i = 0; i < N * N; i++) dist[i] = base[i * 4 + 3] ? 99 : 0
+    for (let pass = 0; pass < 2; pass++)
+      for (let k = 0; k < N * N; k++) {
+        const i = pass ? N * N - 1 - k : k
+        if (!dist[i]) continue
+        const x = i % N
+        const y = (i / N) | 0
+        const nb = pass ? [x < N - 1 ? dist[i + 1] : 0, y < N - 1 ? dist[i + N] : 0] : [x > 0 ? dist[i - 1] : 0, y > 0 ? dist[i - N] : 0]
+        dist[i] = Math.min(dist[i], nb[0] + 1, nb[1] + 1)
+      }
+    const raw = new Float32Array(N * N)
+    for (let i = 0; i < N * N; i++) {
+      if (!dist[i]) continue
+      const o = i * 4
+      const l = (0.299 * base[o] + 0.587 * base[o + 1] + 0.114 * base[o + 2]) / 255
+      raw[i] = Math.sqrt(Math.min(dist[i], 4) / 4) + l * 0.3
+    }
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const i = y * N + x
+        if (!dist[i]) {
+          height[i] = 0
+          continue
+        }
+        let s = raw[i] * 2
+        let w = 2
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const xx = x + dx
+          const yy = y + dy
+          if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue
+          s += raw[yy * N + xx]
+          w++
+        }
+        height[i] = s / w
+      }
+    const H = (x: number, y: number) => (x < 0 || y < 0 || x >= N || y >= N ? 0 : height[y * N + x])
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const gx = H(x + 1, y) - H(x - 1, y)
+        const gy = H(x, y + 1) - H(x, y - 1)
+        const nx = -gx * 2.2
+        const ny = -gy * 2.2
+        const len = Math.hypot(nx, ny, 1)
+        const i = (y * N + x) * 3
+        normal[i] = nx / len
+        normal[i + 1] = ny / len
+        normal[i + 2] = 1 / len
+      }
+  }
+
+  // ---- drawing -------------------------------------------------------------------------
+  function blit(ctx: CanvasRenderingContext2D, buf: Buf, n: number, size: number, opts: { checker?: boolean; grid?: boolean; smooth?: boolean } = {}) {
+    off.width = off.height = n
+    octx.putImageData(new ImageData(buf as unknown as Uint8ClampedArray<ArrayBuffer>, n, n), 0, 0)
+    ctx.canvas.width = ctx.canvas.height = size
+    const px = size / n
+    if (opts.checker !== false) {
+      for (let y = 0; y < n; y++)
+        for (let x = 0; x < n; x++) {
+          ctx.fillStyle = (x + y) % 2 ? '#1a1724' : '#14121c'
+          ctx.fillRect(x * px, y * px, px, px)
+        }
+    }
+    ctx.imageSmoothingEnabled = !!opts.smooth
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(off, 0, 0, size, size)
+    if (opts.grid && px >= 8) {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'
+      for (let k = 1; k < n; k++) {
+        ctx.fillRect(k * px, 0, 1, size)
+        ctx.fillRect(0, k * px, size, 1)
+      }
+    }
+  }
+
+  const colorCount = (b: Buf) => {
+    const s = new Set<number>()
+    for (let i = 0; i < b.length; i += 4) if (b[i + 3]) s.add(pack(b, i))
+    return s.size
+  }
+
+  // ---- light ---------------------------------------------------------------------------
+  const rampCache = new Map<string, RGB>()
+  function ramp(rgb: RGB, step: number, shift: boolean): RGB {
+    if (step === 0) return rgb
+    const key = `${rgb.join(',')},${step},${shift}`
+    const hit = rampCache.get(key)
+    if (hit) return hit
+    const [L, C, h] = rgbToLch(rgb)
+    const a = Math.abs(step)
+    const L2 = Math.min(0.98, Math.max(0.05, L + step * 0.078))
+    let C2 = step === 3 ? C * 0.45 : C * (1 - 0.07 * a)
+    let h2 = h
+    if (shift) {
+      const target = step < 0 ? 272 : 82
+      if (C < 0.025) {
+        C2 = 0.012 * a
+        h2 = target
+      } else h2 = hueToward(h, target, 9 * a)
+    }
+    const res = lchToRgb([L2, C2, h2])
+    rampCache.set(key, res)
+    if (rampCache.size > 4000) rampCache.clear()
+    return res
+  }
+
+  let prevSteps = new Int8Array(N * N)
+  function renderLight() {
+    const res = new Uint8ClampedArray(base)
+    const steps = new Int8Array(N * N)
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const i = y * N + x
+        const o = i * 4
+        if (!base[o + 3]) continue
+        const nx = normal[i * 3]
+        const ny = normal[i * 3 + 1]
+        const nz = normal[i * 3 + 2]
+        let lx = st.lx - (x + 0.5)
+        let ly = st.ly - (y + 0.5)
+        let lz = st.lz - height[i] * 3
+        const ll = Math.hypot(lx, ly, lz)
+        lx /= ll
+        ly /= ll
+        lz /= ll
+        const dot = nx * lx + ny * ly + nz * lz
+        const diff = Math.max(0, dot)
+        const rz = 2 * dot * nz - lz
+        const spec = Math.max(0, rz) ** 18
+        const s = 0.28 + diff * 0.95
+        const rgb: RGB = [base[o], base[o + 1], base[o + 2]]
+        if (st.smooth) {
+          res[o] = rgb[0] * s + spec * 200
+          res[o + 1] = rgb[1] * s + spec * 200
+          res[o + 2] = rgb[2] * s + spec * 190
+        } else {
+          let step = Math.max(-2, Math.min(2, Math.round((s - 0.8) * 4.2)))
+          if (spec > 0.5) step = 3
+          steps[i] = step
+          const c = ramp(rgb, step, st.hueShift)
+          res[o] = c[0]
+          res[o + 1] = c[1]
+          res[o + 2] = c[2]
+        }
+      }
+    let changed = 0
+    for (let i = 0; i < N * N; i++) if (steps[i] !== prevSteps[i]) changed++
+    prevSteps = steps
+    if (changed && active && !st.lightAuto) sound.tick(900 + Math.atan2(st.ly - 10, st.lx - 10) * 200 + 400, Math.min(0.02, 0.004 + changed * 0.0012))
+    stat.textContent = `颜色数 ${colorCount(res)}（原图 ${baseColors}）`
+    return res
+  }
+
+  // ---- outline -------------------------------------------------------------------------
+  function renderOutline() {
+    const res = new Uint8ClampedArray(base)
+    const opaque = (x: number, y: number) => x >= 0 && y >= 0 && x < N && y < N && base[(y * N + x) * 4 + 3] > 0
+    let added = 0
+    let avg: RGB = [0, 0, 0]
+    let n = 0
+    for (let i = 0; i < N * N; i++)
+      if (base[i * 4 + 3]) {
+        avg = [avg[0] + base[i * 4], avg[1] + base[i * 4 + 1], avg[2] + base[i * 4 + 2]]
+        n++
+      }
+    avg = avg.map((v) => v / Math.max(1, n)) as RGB
+    const [aL, aC, aH] = rgbToLch(avg)
+    const set = (x: number, y: number, c: RGB, a = 255) => {
+      const o = (y * N + x) * 4
+      res[o] = c[0]
+      res[o + 1] = c[1]
+      res[o + 2] = c[2]
+      res[o + 3] = a
+    }
+    const N4 = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+    if (st.shadow) {
+      for (let y = N - 1; y >= 1; y--)
+        for (let x = N - 1; x >= 1; x--)
+          if (!opaque(x, y) && opaque(x - 1, y - 1)) set(x, y, [10, 8, 18], 140)
+    }
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        const o = (y * N + x) * 4
+        if (st.outline === 'inner') {
+          if (opaque(x, y) && N4.some(([dx, dy]) => !opaque(x + dx, y + dy))) {
+            const [L, C, h] = rgbToLch([base[o], base[o + 1], base[o + 2]])
+            set(x, y, lchToRgb([Math.max(0.05, L - 0.2), C * 0.9, hueToward(h, 272, 12)]))
+            added++
+          }
+          continue
+        }
+        if (opaque(x, y)) continue
+        const nb = N4.map(([dx, dy]) => [x + dx, y + dy]).filter(([a, b]) => opaque(a, b))
+        if (st.outline === 'glow') {
+          let near = 9
+          for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (opaque(x + dx, y + dy)) near = Math.min(near, Math.max(Math.abs(dx), Math.abs(dy)))
+          if (near <= 2) {
+            set(x, y, lchToRgb([Math.min(0.95, aL + 0.25), Math.max(0.12, aC), aH]), near === 1 ? 170 : 70)
+            added++
+          }
+          continue
+        }
+        if (!nb.length) continue
+        if (st.outline === 'black') set(x, y, [12, 10, 18])
+        else if (st.outline === 'color') set(x, y, lchToRgb([Math.max(0.12, aL - 0.35), Math.max(0.06, aC), aH]))
+        else if (st.outline === 'selout') {
+          const [nx, ny] = nb[0]
+          const p = (ny * N + nx) * 4
+          const [L, C, h] = rgbToLch([base[p], base[p + 1], base[p + 2]])
+          set(x, y, lchToRgb([Math.max(0.08, L - 0.3), Math.min(0.2, C * 1.1 + 0.02), hueToward(h, 272, 18)]))
+        } else continue
+        added++
+      }
+    stat.textContent = st.outline === 'none' ? `原图 ${baseColors} 色` : `改动 ${added} 个像素 · 颜色数 ${colorCount(res)}`
+    return res
+  }
+
+  // ---- palette swap ----------------------------------------------------------------------
+  function swapped(v: (typeof VARIANTS)[number], hueOffset = 0): Buf {
+    const res = new Uint8ClampedArray(base)
+    if (v.h === undefined && !hueOffset) return res
+    let sx = 0
+    let sy = 0
+    for (let i = 0; i < N * N; i++) {
+      if (!base[i * 4 + 3]) continue
+      const [, C, h] = rgbToLch([base[i * 4], base[i * 4 + 1], base[i * 4 + 2]])
+      sx += Math.cos((h * Math.PI) / 180) * C
+      sy += Math.sin((h * Math.PI) / 180) * C
+    }
+    const hAvg = ((Math.atan2(sy, sx) * 180) / Math.PI + 360) % 360
+    for (let i = 0; i < N * N; i++) {
+      const o = i * 4
+      if (!base[o + 3]) continue
+      const [L, C, h] = rgbToLch([base[o], base[o + 1], base[o + 2]])
+      let L2 = L
+      let C2 = C
+      let h2 = h
+      if (v.h !== undefined) {
+        L2 = Math.min(0.97, Math.max(0.04, L + (v.l ?? 0) * (C < 0.025 ? 0.5 : 1)))
+        if (C >= 0.025) {
+          const rel = ((h - hAvg + 540) % 360) - 180
+          h2 = (v.h + rel * 0.35 + 360) % 360
+          C2 = C * (v.c ?? 1)
+        }
+      }
+      if (hueOffset && C >= 0.025) h2 = (h2 + hueOffset + 360) % 360
+      const c = lchToRgb([L2, C2, h2])
+      res[o] = c[0]
+      res[o + 1] = c[1]
+      res[o + 2] = c[2]
+    }
+    return res
+  }
+
+  function renderVariants() {
+    extra.replaceChildren(
+      ...VARIANTS.map((v, k) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'ws-variant'
+        b.setAttribute('aria-pressed', String(k === st.variant))
+        const c = document.createElement('canvas')
+        blit(c.getContext('2d')!, swapped(v), N, N * 4, { checker: false })
+        b.append(c, Object.assign(document.createElement('span'), { textContent: v.name }))
+        b.addEventListener('click', () => {
+          st.variant = k
+          st.hue = 0
+          sound.pop()
+          extra.querySelectorAll('button').forEach((x, j) => x.setAttribute('aria-pressed', String(j === k)))
+          render()
+        })
+        return b
+      }),
+    )
+  }
+
+  // ---- scale -----------------------------------------------------------------------------
+  function renderScale() {
+    const panels: [string, (ctx: CanvasRenderingContext2D) => void][] = [
+      ['最近邻 ×4', (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false })],
+      ['双线性 ×4', (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false, smooth: true })],
+      ['Scale2x ×2 ×2', (ctx) => blit(ctx, scale2x(scale2x(base, N), N * 2), N * 4, N * 4 * 2, { checker: false })],
+    ]
+    extra.replaceChildren(
+      ...panels.map(([label, draw]) => {
+        const f = document.createElement('figure')
+        f.className = 'ws-panel'
+        const c = document.createElement('canvas')
+        draw(c.getContext('2d')!)
+        f.append(c, Object.assign(document.createElement('figcaption'), { textContent: label }))
+        return f
+      }),
+    )
+    stat.textContent = `Scale2x 之后颜色数 ${colorCount(scale2x(scale2x(base, N), N * 2))}（不变）`
+  }
+
+  // ---- rotate ---------------------------------------------------------------------------
+  const R = 24
+  let rotBig: Buf | null = null
+  function rotate(src: Buf, n: number, k: number, angle: number): Buf {
+    const res = new Uint8ClampedArray(R * R * 4)
+    const c = Math.cos(angle)
+    const s = Math.sin(angle)
+    for (let y = 0; y < R; y++)
+      for (let x = 0; x < R; x++) {
+        const dx = x + 0.5 - R / 2
+        const dy = y + 0.5 - R / 2
+        const sx = (c * dx + s * dy + N / 2) * k
+        const sy = (-s * dx + c * dy + N / 2) * k
+        const ix = Math.floor(sx)
+        const iy = Math.floor(sy)
+        if (ix < 0 || iy < 0 || ix >= n || iy >= n) continue
+        const so = (iy * n + ix) * 4
+        const o = (y * R + x) * 4
+        res[o] = src[so]
+        res[o + 1] = src[so + 1]
+        res[o + 2] = src[so + 2]
+        res[o + 3] = src[so + 3]
+      }
+    return res
+  }
+  let rotPanels: CanvasRenderingContext2D[] = []
+  function setupRotate() {
+    rotBig = scale2x(scale2x(scale2x(base, N), N * 2), N * 4)
+    rotPanels = ['直接旋转', 'RotSprite'].map((label) => {
+      const f = document.createElement('figure')
+      f.className = 'ws-panel'
+      const c = document.createElement('canvas')
+      f.append(c, Object.assign(document.createElement('figcaption'), { textContent: label }))
+      extra.append(f)
+      return c.getContext('2d')!
+    })
+  }
+  function renderRotate() {
+    if (!rotBig) {
+      extra.replaceChildren()
+      setupRotate()
+    }
+    const a = st.angle
+    blit(rotPanels[0], rotate(base, N, 1, a), R, R * 9, { checker: false })
+    blit(rotPanels[1], rotate(rotBig!, N * 8, 8, a), R, R * 9, { checker: false })
+    stat.textContent = `角度 ${Math.round((((a * 180) / Math.PI) % 360 + 360) % 360)}°`
+  }
+
+  // ---- juice ------------------------------------------------------------------------------
+  const juice = { flashUntil: 0, stopUntil: 0, knockAt: 0, combo: 0, lastHit: 0, particles: [] as { x: number; y: number; vx: number; vy: number; c: string; life: number }[] }
+  function hit(px: number, py: number) {
+    const now = performance.now()
+    const j = st.juice
+    juice.combo = now - juice.lastHit < 900 ? juice.combo + 1 : 1
+    juice.lastHit = now
+    const crit = Math.random() < 0.18
+    if (j.flash) juice.flashUntil = now + (j.stop ? 140 : 80)
+    const delay = j.stop ? 80 : 0
+    juice.stopUntil = j.stop ? now + delay : 0
+    if (j.sound) {
+      sound.hit()
+      if (crit) sound.tone(1320, 0.12, { vol: 0.05, at: 0.02 })
+    }
+    setTimeout(() => {
+      if (j.knock) juice.knockAt = performance.now()
+      if (j.shake && !reducedMotion) gsap.fromTo(stageEl, { x: 0, y: 0 }, { x: () => (Math.random() - 0.5) * 14, y: () => (Math.random() - 0.5) * 10, duration: 0.04, repeat: 5, yoyo: true, ease: 'steps(1)', onComplete: () => void gsap.set(stageEl, { x: 0, y: 0 }) })
+      if (j.particles) {
+        for (let k = 0; k < 14; k++) {
+          let o = 0
+          for (let t = 0; t < 30; t++) {
+            const i = (Math.random() * N * N) | 0
+            if (base[i * 4 + 3]) {
+              o = i * 4
+              break
+            }
+          }
+          juice.particles.push({ x: px, y: py, vx: (Math.random() - 0.3) * 7, vy: -Math.random() * 7 - 1, c: `rgb(${base[o]},${base[o + 1]},${base[o + 2]})`, life: 1 })
+        }
+      }
+      if (j.number) {
+        const d = document.createElement('span')
+        d.className = `ws-dmg pix${crit ? ' crit' : ''}`
+        d.textContent = crit ? `${20 + ((Math.random() * 20) | 0)}!` : `-${6 + ((Math.random() * 10) | 0)}`
+        d.style.left = `${(px / (N * SCALE)) * 100}%`
+        d.style.top = `${(py / (N * SCALE)) * 100}%`
+        stageEl.append(d)
+        gsap.fromTo(d, { y: 0, opacity: 1, scale: crit ? 1.6 : 1 }, { y: -70, opacity: 0, scale: 1, duration: 0.8, ease: 'steps(10)', onComplete: () => d.remove() })
+      }
+    }, delay)
+    stat.textContent = juice.combo > 1 ? `连击 ×${juice.combo}` : '再打一下'
+  }
+
+  function renderJuice(now: number) {
+    let buf = new Uint8ClampedArray(base)
+    // idle breathing: every other beat the top half sinks one pixel
+    if (now >= juice.stopUntil && Math.floor(now / 420) % 2 === 1) {
+      const sq = new Uint8ClampedArray(N * N * 4)
+      for (let y = 0; y < N; y++)
+        for (let x = 0; x < N; x++) {
+          const sy = y < 12 ? y - 1 : y
+          if (sy < 0) continue
+          const s = (sy * N + x) * 4
+          const d = (y * N + x) * 4
+          for (let k = 0; k < 4; k++) sq[d + k] = buf[s + k]
+        }
+      buf = sq
+    }
+    if (now < juice.flashUntil) for (let i = 0; i < buf.length; i += 4) if (buf[i + 3]) buf[i] = buf[i + 1] = buf[i + 2] = 255
+    let dx = 0
+    if (juice.knockAt && now >= juice.stopUntil) {
+      const t = (now - juice.knockAt) / 260
+      dx = t < 1 ? Math.round(3 * (1 - t) * (1 - t)) : 0
+    }
+    if (dx) {
+      const sh = new Uint8ClampedArray(N * N * 4)
+      for (let y = 0; y < N; y++)
+        for (let x = dx; x < N; x++) for (let k = 0; k < 4; k++) sh[(y * N + x) * 4 + k] = buf[(y * N + x - dx) * 4 + k]
+      buf = sh
+    }
+    // particles on the fx layer
+    fctx.clearRect(0, 0, fxc.width, fxc.height)
+    if (now >= juice.stopUntil) {
+      juice.particles = juice.particles.filter((p) => p.life > 0)
+      for (const p of juice.particles) {
+        p.x += p.vx
+        p.y += p.vy
+        p.vy += 0.45
+        p.life -= 0.025
+        fctx.globalAlpha = Math.max(0, p.life)
+        fctx.fillStyle = p.c
+        fctx.fillRect(Math.round(p.x / 8) * 8, Math.round(p.y / 8) * 8, 8, 8)
+      }
+      fctx.globalAlpha = 1
+    }
+    return buf
+  }
+
+  // ---- controls ---------------------------------------------------------------------------
+  function checkbox(label: string, get: () => boolean, set: (v: boolean) => void) {
+    const l = document.createElement('label')
+    l.className = 'toggle pix'
+    const i = document.createElement('input')
+    i.type = 'checkbox'
+    i.checked = get()
+    i.addEventListener('change', () => {
+      set(i.checked)
+      sound.click()
+      render()
+    })
+    l.append(i, ` ${label}`)
+    return l
+  }
+  function radios(name: string, opts: [string, string][], get: () => string, set: (v: string) => void) {
+    const wrap = document.createElement('div')
+    wrap.className = 'ws-radios'
+    for (const [v, label] of opts) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'chip'
+      b.textContent = label
+      b.setAttribute('aria-pressed', String(get() === v))
+      b.addEventListener('click', () => {
+        set(v)
+        sound.pop()
+        wrap.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+        render()
+      })
+      wrap.append(b)
+    }
+    wrap.dataset.name = name
+    return wrap
+  }
+  function slider(label: string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) {
+    const l = document.createElement('label')
+    l.className = 'ws-slider pix'
+    const i = document.createElement('input')
+    i.type = 'range'
+    i.min = String(min)
+    i.max = String(max)
+    i.step = String(step)
+    i.value = String(get())
+    i.addEventListener('input', () => {
+      set(Number(i.value))
+      render()
+    })
+    l.append(label, i)
+    return l
+  }
+
+  function setTool(id: ToolId) {
+    tool = id
+    const t = TOOLS.find((x) => x.id === id)!
+    nameEl.textContent = t.name
+    descEl.textContent = t.desc
+    toolNav.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === id)))
+    el.dataset.tool = id
+    extra.replaceChildren()
+    rotBig = null
+    fctx.clearRect(0, 0, fxc.width, fxc.height)
+    const c: HTMLElement[] = []
+    if (id === 'light') {
+      c.push(checkbox('量化到色阶', () => !st.smooth, (v) => (st.smooth = !v)))
+      c.push(checkbox('色相偏移（冷影暖光）', () => st.hueShift, (v) => (st.hueShift = v)))
+      c.push(slider('光源高度', 2, 16, 0.5, () => st.lz, (v) => (st.lz = v)))
+    } else if (id === 'outline') {
+      c.push(
+        radios(
+          'outline',
+          [
+            ['none', '无'],
+            ['black', '黑色外描边'],
+            ['selout', '选择性描边'],
+            ['color', '同色系外描边'],
+            ['inner', '内描边'],
+            ['glow', '外发光'],
+          ],
+          () => st.outline,
+          (v) => (st.outline = v),
+        ),
+      )
+      c.push(checkbox('投影', () => st.shadow, (v) => (st.shadow = v)))
+    } else if (id === 'swap') {
+      renderVariants()
+    } else if (id === 'scale') {
+      renderScale()
+    } else if (id === 'rotate') {
+      c.push(
+        slider('角度', 0, 6.283, 0.01, () => st.angle, (v) => {
+          st.angle = v
+          st.rotAuto = false
+        }),
+      )
+    } else if (id === 'juice') {
+      const j = st.juice
+      const opts: [keyof typeof j, string][] = [
+        ['stop', '顿帧'],
+        ['flash', '闪白'],
+        ['shake', '震屏'],
+        ['knock', '击退'],
+        ['particles', '粒子'],
+        ['number', '飘字'],
+        ['sound', '音效'],
+      ]
+      const wrap = document.createElement('div')
+      wrap.className = 'ws-checks'
+      for (const [k, label] of opts) wrap.append(checkbox(label, () => j[k], (v) => (j[k] = v)))
+      c.push(wrap)
+    }
+    controls.replaceChildren(...c)
+    render()
+  }
+
+  function render() {
+    const now = performance.now()
+    switch (tool) {
+      case 'light':
+        out = renderLight()
+        break
+      case 'outline':
+        out = renderOutline()
+        break
+      case 'swap':
+        out = swapped(VARIANTS[st.variant], st.hue)
+        stat.textContent = st.hue ? `色相 ${st.hue > 0 ? '+' : ''}${Math.round(st.hue)}° · ${VARIANTS[st.variant].name}` : VARIANTS[st.variant].name
+        break
+      case 'scale':
+        out = base
+        break
+      case 'rotate':
+        renderRotate()
+        out = base
+        break
+      case 'juice':
+        out = renderJuice(now)
+        break
+    }
+    blit(mctx, out, N, N * SCALE, { grid: true })
+    sun.hidden = tool !== 'light'
+    if (tool === 'light') {
+      sun.style.left = `${(st.lx / N) * 100}%`
+      sun.style.top = `${(st.ly / N) * 100}%`
+    }
+  }
+
+  // ---- input -------------------------------------------------------------------------------
+  let dragX: number | null = null
+  const toBuf = (e: PointerEvent) => {
+    const r = main.getBoundingClientRect()
+    return { x: ((e.clientX - r.left) / r.width) * N, y: ((e.clientY - r.top) / r.height) * N, px: ((e.clientX - r.left) / r.width) * N * SCALE, py: ((e.clientY - r.top) / r.height) * N * SCALE }
+  }
+  main.addEventListener('pointermove', (e) => {
+    const p = toBuf(e)
+    if (tool === 'light') {
+      st.lightAuto = false
+      st.lx = p.x
+      st.ly = p.y
+    }
+    if (dragX !== null && (tool === 'swap' || tool === 'rotate')) {
+      const dx = e.clientX - dragX
+      dragX = e.clientX
+      if (tool === 'swap') {
+        st.hue = (((st.hue + dx * 1.2 + 180) % 360) + 360) % 360 - 180
+        if (Math.abs(dx) > 0) sound.tick(800 + ((st.hue + 180) / 360) * 1600, 0.012)
+      } else {
+        st.angle += dx * 0.012
+        st.rotAuto = false
+        sound.tick(1200 + Math.abs(dx) * 40, 0.01)
+      }
+    }
+    if (tool !== 'juice') render()
+  })
+  main.addEventListener('pointerleave', () => {
+    if (tool === 'light') st.lightAuto = true
+  })
+  main.addEventListener('pointerdown', (e) => {
+    main.setPointerCapture(e.pointerId)
+    dragX = e.clientX
+    if (tool === 'juice') {
+      const p = toBuf(e)
+      hit(p.px, p.py)
+    }
+  })
+  const up = () => (dragX = null)
+  main.addEventListener('pointerup', up)
+  main.addEventListener('pointercancel', up)
+
+  toolNav.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-tool]')
+    if (!b) return
+    sound.click()
+    setTool(b.dataset.tool as ToolId)
+  })
+  toolNav.addEventListener('pointerover', (e) => {
+    if ((e.target as HTMLElement).closest('[data-tool]')) sound.tick(2000, 0.01)
+  })
+
+  const tray = sprites.slice(0, 14)
+  function renderTray(extraFirst?: { url: string; label: string; src: HTMLCanvasElement | ImageData }) {
+    const items: { url: string; label: string; src: HTMLCanvasElement | ImageData }[] = tray.map((s) => ({ url: s.url, label: s.caption, src: s.data }))
+    if (extraFirst) items.unshift(extraFirst)
+    trayEl.replaceChildren(
+      ...items.map((it) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.title = it.label
+        b.innerHTML = `<img src="${it.url}" alt="">`
+        b.addEventListener('click', () => {
+          sound.pop()
+          load(it.src, it.label)
+        })
+        return b
+      }),
+    )
+  }
+  let carried: { url: string; label: string; src: HTMLCanvasElement | ImageData } | undefined
+  renderTray()
+
+  el.querySelector('.ws-export')!.addEventListener('click', () => {
+    sound.click()
+    const n = Math.round(Math.sqrt(out.length / 4)) || N
+    const c = document.createElement('canvas')
+    blit(c.getContext('2d')!, out, n, n * 16, { checker: false })
+    c.toBlob((blob) => {
+      if (!blob) return
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `pixel-atlas-workshop-${tool}.png`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    })
+  })
+
+  function loop(now: number) {
+    if (tool === 'light' && st.lightAuto && !reducedMotion) {
+      const t = now / 1000
+      st.lx = N / 2 + Math.cos(t * 0.8) * 9
+      st.ly = N / 2 + Math.sin(t * 0.8) * 7
+      render()
+    } else if (tool === 'rotate' && st.rotAuto && !reducedMotion) {
+      st.angle = Math.sin(now / 1400) * 0.9
+      render()
+    } else if (tool === 'juice') render()
+    if (active) raf = requestAnimationFrame(loop)
+  }
+
+  const first = sprites.find((s) => /apple|orb/.test(s.subject)) ?? sprites[0]
+  load(first.data, first.caption)
+  setTool('light')
+
+  return {
+    id: 'workshop',
+    num: '03',
+    title: '工坊',
+    color: '#1b1626',
+    transition: 'iris',
+    el,
+    load(src, label) {
+      const c = document.createElement('canvas')
+      c.width = c.height = 16
+      if (src instanceof ImageData) c.getContext('2d')!.putImageData(src, 0, 0)
+      else c.getContext('2d')!.drawImage(src, 0, 0)
+      carried = { url: c.toDataURL(), label: `来自星图：${label}`, src: c }
+      renderTray(carried)
+      load(c, carried.label)
+    },
+    enter() {
+      active = true
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(loop)
+    },
+    leave() {
+      active = false
+      cancelAnimationFrame(raf)
+    },
+  }
+}

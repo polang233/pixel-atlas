@@ -1,4 +1,6 @@
-export type TransitionKind = 'dither' | 'slash' | 'crt' | 'fade'
+export type TransitionKind = 'dither' | 'slash' | 'crt' | 'iris' | 'wave' | 'glitch' | 'melt' | 'fade'
+
+export type AmbienceName = 'space' | 'crt' | 'dungeon' | 'ocean' | 'neon' | 'cthulhu' | 'outro' | 'workshop' | 'depth'
 
 export interface Chapter {
   id: string
@@ -8,6 +10,8 @@ export interface Chapter {
   color: string
   /** transition used when this chapter is entered */
   transition: TransitionKind
+  /** background sound loop while the chapter is active */
+  ambience?: AmbienceName
   el: HTMLElement
   /**
    * Scroll input inside the chapter. Positive = forward.
@@ -18,6 +22,7 @@ export interface Chapter {
   /** called once the chapter is visible; dir = 1 forward, -1 backward */
   enter?(dir: 1 | -1): void
   leave?(): void
+  focusSearch?(): void
 }
 
 export const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches

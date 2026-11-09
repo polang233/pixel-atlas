@@ -6,50 +6,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07060c" />
     <title>Pixel Atlas · 像素图鉴</title>
-    <meta name="description" content="140 万张 16×16 像素素材，以及关于像素风格的一切。" />
+    <meta name="description" content="140 万张 16×16 像素素材，排成一颗可以搜索的星球；以及关于像素风格的一切。" />
   </head>
   <body>
     <div id="app">
-      <canvas id="gl" aria-hidden="true"></canvas>
-
       <header class="hud hud-top">
-        <a class="logo" href="#hero" data-goto="hero">PIXEL<span>·</span>ATLAS</a>
-        <div class="hud-chapter"><span class="hud-num">01</span><span class="hud-title">开场</span></div>
+        <a class="logo" href="#hero">PIXEL<span>·</span>ATLAS</a>
+        <div class="hud-chapter"><span class="hud-num">00</span><span class="hud-title">星图</span></div>
       </header>
 
       <nav class="pips" aria-label="章节"></nav>
 
       <footer class="hud hud-bottom">
-        <span class="hint"><kbd>滚轮</kbd><kbd>↑↓</kbd><kbd>滑动</kbd> 翻页</span>
-        <button class="map-btn" type="button"><kbd>M</kbd> 关卡地图</button>
+        <span class="hint"><kbd>滚轮</kbd><kbd>↑↓</kbd><kbd>/</kbd> 搜索</span>
+        <div class="hud-right">
+          <button class="snd-btn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span>点我开声音</span></button>
+          <button class="map-btn" type="button"><kbd>M</kbd> 关卡地图</button>
+        </div>
       </footer>
 
       <main id="stage">
-        <!-- 00 HERO -->
-        <section class="chapter ch-hero" data-id="hero" aria-label="开场">
-          <div class="hero-title" data-hero="title">
-            <p class="eyebrow">VOL.1 · CC0 · AI-GENERATED</p>
+        <!-- 00 星图 -->
+        <section class="chapter ch-hero" data-id="hero" aria-label="星图">
+          <canvas class="hero-gl" data-own-touch aria-label="140 万张素材按平均色排成的星球，可拖动、缩放、点击"></canvas>
+          <div class="hero-reticle" hidden><i></i><i></i><i></i><i></i></div>
+          <div class="hero-hover" hidden></div>
+          <div class="hero-tip pix" hidden></div>
+
+          <div class="hero-panel">
+            <p class="eyebrow">VOL.1 · CC0 · 1,409,404 SPRITES</p>
             <h1>PIXEL<br />ATLAS</h1>
-            <p class="hero-sub"><b class="count">1,409,404</b> 张 16×16 像素素材</p>
+            <p class="hero-sub">像素图鉴 · <b>140 万</b>张 16×16 素材</p>
+            <p class="hero-intro">每一个点是一张素材的平均色。灰色沉在核心，彩色按色相绕成光环——暖色占了大半圈，因为游戏世界里木头、皮革、火光最多。</p>
+            <form class="hero-search" autocomplete="off" role="search">
+              <span class="pix" aria-hidden="true">&gt;</span>
+              <input type="search" name="q" placeholder="搜索：史莱姆 / sword / 蓝色宝箱 / #ff4d6d" aria-label="搜索素材" enterkeyhint="go" />
+              <button type="button" class="dice pix" title="随机飞到一张">随机</button>
+            </form>
+            <div class="hero-suggest">
+              <span class="dim pix">试试</span>
+              <button type="button" class="chip" data-q="史莱姆">史莱姆</button>
+              <button type="button" class="chip" data-q="宝箱">宝箱</button>
+              <button type="button" class="chip" data-q="蘑菇">蘑菇</button>
+              <button type="button" class="chip" data-q="紫色 药水">紫色药水</button>
+              <button type="button" class="chip" data-q="cat">cat</button>
+              <button type="button" class="chip" data-q="#ff4d6d"><i class="sw" style="background:#ff4d6d"></i>#ff4d6d</button>
+            </div>
+            <p class="hero-status pix" role="status"></p>
+            <div class="hero-subjects"></div>
+            <div class="hero-tray"></div>
+            <div class="hero-step" hidden>
+              <button type="button" class="chip" data-step="-1">◀ 上一张</button>
+              <button type="button" class="chip" data-step="1">下一张 ▶</button>
+              <span class="dim pix">回车也行</span>
+            </div>
           </div>
-          <div class="hero-note" data-hero="mid">
-            <p class="pix">这不是一颗星球。</p>
-            <p>每一个点，都是一张素材的平均色。灰色沉在核心，彩色按色相绕成光环——暖色占了大半圈，因为游戏世界里木头、皮革、火光最多。</p>
+
+          <aside class="hero-card" hidden>
+            <button type="button" class="card-x" data-act="close" aria-label="关闭">×</button>
+            <canvas width="16" height="16"></canvas>
+            <p class="cap pix"></p>
+            <p class="meta"></p>
+            <div class="btns">
+              <button type="button" class="chip hot" data-act="workshop">放进工坊 →</button>
+              <button type="button" class="chip" data-act="png">下载 PNG</button>
+              <button type="button" class="chip" data-act="same">找同类</button>
+            </div>
+          </aside>
+
+          <div class="hero-lod pix" aria-hidden="true">
+            <ol><li>星球</li><li>色块</li><li>缩略</li><li>原图</li></ol>
+            <p class="hero-tech"></p>
           </div>
-          <div class="hero-end" data-hero="end">
-            <p class="pix tag">#<span data-target-id></span></p>
-            <p class="pix big" data-target-caption></p>
-            <p>16 × 16 = 256 个格子。一切从这里开始。</p>
-          </div>
-          <div class="scroll-cue" data-hero="cue"><span class="pix">向下潜入</span><i></i></div>
+          <p class="hero-hint pix"></p>
+          <button type="button" class="hero-next pix">下一章 ↓</button>
         </section>
 
-        <!-- 01 DEPTH -->
+        <!-- 01 色深 -->
         <section class="chapter ch-depth" data-id="depth" aria-label="色深">
           <div class="depth-copy">
             <p class="eyebrow pix">CHAPTER 01 · COLOR DEPTH</p>
             <h2 class="pix">色深</h2>
             <p class="depth-stage-name pix"></p>
+            <p class="depth-era pix dim"></p>
             <p class="depth-stage-desc"></p>
             <ol class="depth-steps"></ol>
             <label class="toggle"><input type="checkbox" class="dither-toggle" /> <span class="pix">有序抖动</span></label>
@@ -60,20 +99,97 @@
           </div>
         </section>
 
-        <!-- 02 DUNGEON -->
+        <!-- 02 显像管 -->
+        <section class="chapter ch-crt" data-id="crt" aria-label="显像管">
+          <canvas class="crt-gl" aria-label="一个小游戏画面，按住看原始像素"></canvas>
+          <div class="crt-copy">
+            <p class="eyebrow pix">CHAPTER 02 · CRT</p>
+            <h2 class="pix">显像管</h2>
+            <p class="crt-stage-name pix"></p>
+            <p class="crt-stage-desc"></p>
+            <ol class="crt-steps"></ol>
+            <p class="dim pix">滚动逐层打开 · 按住画面看原始像素</p>
+          </div>
+        </section>
+
+        <!-- 03 工坊 -->
+        <section class="chapter ch-workshop" data-id="workshop" aria-label="像素工坊">
+          <div class="ws-head">
+            <p class="eyebrow pix">CHAPTER 03 · WORKSHOP</p>
+            <h2 class="pix">像素工坊</h2>
+          </div>
+          <nav class="ws-tools" aria-label="工具">
+            <button type="button" data-tool="light"><b>01</b>高光</button>
+            <button type="button" data-tool="outline"><b>02</b>描边</button>
+            <button type="button" data-tool="swap"><b>03</b>换色</button>
+            <button type="button" data-tool="scale"><b>04</b>放大</button>
+            <button type="button" data-tool="rotate"><b>05</b>旋转</button>
+            <button type="button" data-tool="juice"><b>06</b>打击感</button>
+          </nav>
+          <div class="ws-stage">
+            <div class="ws-canvas-wrap" data-own-touch>
+              <canvas class="ws-main"></canvas>
+              <canvas class="ws-fx"></canvas>
+              <i class="ws-sun" hidden></i>
+            </div>
+            <p class="ws-label pix dim"></p>
+            <div class="ws-extra"></div>
+          </div>
+          <div class="ws-side" data-own-touch>
+            <h3 class="ws-tool-name pix"></h3>
+            <p class="ws-tool-desc"></p>
+            <div class="ws-controls"></div>
+            <p class="ws-stat pix"></p>
+            <p class="dim pix ws-tray-label">换一张素材</p>
+            <div class="ws-tray"></div>
+            <button type="button" class="chip ws-export">下载当前结果 PNG</button>
+          </div>
+        </section>
+
+        <!-- 04 地牢 -->
         <section class="chapter ch-dungeon" data-id="dungeon" aria-label="地牢">
           <div class="dungeon-floor"></div>
+          <div class="dungeon-planted"></div>
           <canvas class="dungeon-dark"></canvas>
           <div class="dungeon-copy">
-            <p class="eyebrow pix">CHAPTER 02 · DUNGEON</p>
+            <p class="eyebrow pix">CHAPTER 04 · DUNGEON</p>
             <h2 class="pix">地牢</h2>
-            <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>，光源越少，玩家越想往前走。</p>
-            <p class="dim pix">移动鼠标：你就是火把</p>
+            <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>。光源越少，玩家越想往前走。</p>
+            <p class="dim pix">移动鼠标：你就是火把 · <span class="dungeon-count"></span></p>
           </div>
           <div class="dungeon-tip pix" role="status"></div>
         </section>
 
-        <!-- 03 CTHULHU -->
+        <!-- 05 深海 -->
+        <section class="chapter ch-ocean" data-id="ocean" aria-label="深海">
+          <canvas class="oc-canvas"></canvas>
+          <div class="oc-copy">
+            <p class="eyebrow pix">CHAPTER 05 · DEEP SEA</p>
+            <h2 class="pix">深海</h2>
+            <p class="oc-zone pix"></p>
+            <p class="oc-desc"></p>
+            <p class="dim pix">向下滚动下潜 · 点击发出声呐</p>
+          </div>
+          <div class="oc-meter pix" aria-hidden="true">
+            <div class="oc-ruler"><span style="top:0">0</span><span style="top:5%">200</span><span style="top:25%">1000</span><span style="top:75%">3000</span><span style="top:100%">4000</span><i class="oc-marker"></i></div>
+            <b class="oc-depth">0 m</b>
+          </div>
+        </section>
+
+        <!-- 06 霓虹 -->
+        <section class="chapter ch-neon" data-id="neon" aria-label="霓虹">
+          <canvas class="neon-canvas"></canvas>
+          <div class="neon-copy">
+            <p class="eyebrow pix">CHAPTER 06 · NEON</p>
+            <h2 class="pix">霓虹</h2>
+            <p>霓虹风把颜色收成几种高饱和的光——洋红、青、紫——其余全压进黑里。每块招牌都是程序把素材“霓虹化”的结果：只留轮廓和最强的内边，再加一圈光晕。像素的硬边，正好就是灯管。</p>
+            <p class="dim pix">靠近招牌通电 · 滚动逐个点亮 · <span class="neon-count"></span></p>
+            <button type="button" class="chip neon-raw" aria-pressed="false">看原图</button>
+          </div>
+          <div class="neon-tip" hidden></div>
+        </section>
+
+        <!-- 07 克苏鲁 -->
         <section class="chapter ch-cthulhu" data-id="cthulhu" aria-label="克苏鲁">
           <svg class="defs" width="0" height="0" aria-hidden="true">
             <filter id="madness">
@@ -83,7 +199,7 @@
           </svg>
           <div class="cth-field"></div>
           <div class="cth-copy">
-            <p class="eyebrow pix">CHAPTER 03 · COSMIC HORROR</p>
+            <p class="eyebrow pix">CHAPTER 07 · COSMIC HORROR</p>
             <h2 class="pix glitch" data-text="不可名状">不可名状</h2>
             <p class="cth-text" data-src="克苏鲁风格从不把怪物画清楚。低饱和的墨绿与淤紫、不对称的轮廓、太多的眼睛——16×16 的模糊恰好替你留白，剩下的交给玩家的想象。"></p>
             <div class="san"><span class="pix">SAN</span><div class="san-bar"><i></i></div><b class="pix san-num">100</b></div>
@@ -91,19 +207,40 @@
           </div>
         </section>
 
-        <!-- 04 OUTRO -->
-        <section class="chapter ch-outro" data-id="outro" aria-label="素材库">
+        <!-- 08 带走 -->
+        <section class="chapter ch-outro" data-id="outro" aria-label="带走">
           <div class="outro-rain"></div>
           <div class="outro-box">
-            <p class="eyebrow pix">NEXT STAGE</p>
-            <h2 class="pix">素材库</h2>
-            <p>140 万张素材，按名字、颜色、题材搜索；一键放大导出，打包成精灵表。</p>
-            <div class="search-fake pix"><span>&gt; 搜索 slime / 宝箱 / 克苏鲁…</span><i></i></div>
-            <p class="dim pix">建设中 · 原型 v0</p>
+            <p class="eyebrow pix">LAST STAGE · 背包</p>
+            <h2 class="pix">带走它们</h2>
+            <p>140 万张素材都是 CC0。下面是它们接下来的去处——都还在建设中。</p>
+            <div class="outro-cards">
+              <article class="outro-card">
+                <h3 class="pix">GitHub 图集</h3>
+                <p>按颜色分块的 PNG 图集 + JSON 元数据，Releases 直接下载。</p>
+                <span class="tag pix">建设中</span>
+              </article>
+              <article class="outro-card">
+                <h3 class="pix">命令行</h3>
+                <p><code>npx pixel-atlas search slime --png</code></p>
+                <button type="button" class="chip" data-copy="npx pixel-atlas search slime --png">复制</button>
+              </article>
+              <article class="outro-card">
+                <h3 class="pix">dsh 插件 / 技能</h3>
+                <p>在 Claude 里直接说：“给我 20 张紫色史莱姆，拼成精灵表”。</p>
+                <span class="tag pix">建设中</span>
+              </article>
+              <article class="outro-card">
+                <h3 class="pix">许可</h3>
+                <p>CC0（作者权利范围内）。AI 生成，部分形象可能近似现有作品，商用前请自查商标。</p>
+              </article>
+            </div>
+            <button type="button" class="outro-search pix">回到星图搜索 ↖</button>
           </div>
         </section>
       </main>
 
+      <div class="boot pix" aria-live="polite"><p>PIXEL·ATLAS</p><i></i><span>正在把 140 万张素材排成一颗星球…</span></div>
       <canvas id="fx" aria-hidden="true"></canvas>
       <div class="slash" aria-hidden="true"><i></i></div>
 

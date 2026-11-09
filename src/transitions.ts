@@ -1,4 +1,5 @@
 import gsap from 'gsap'
+import { sound } from './audio'
 import type { TransitionKind } from './types'
 
 const fx = document.querySelector<HTMLCanvasElement>('#fx')!
@@ -19,30 +20,36 @@ function tween(duration: number, onUpdate: (t: number) => void, ease = 'none'): 
   })
 }
 
-/** Ordered-dither dissolve: blocks fill in Bayer order, biased into a diagonal sweep. */
-async function dither(color: string, swap: () => void, dir: 1 | -1) {
-  const block = window.innerWidth < 700 ? 18 : 28
+/** low-res fx canvas: every canvas pixel is one chunky screen block */
+function grid(block: number) {
   const cols = Math.ceil(window.innerWidth / block)
   const rows = Math.ceil(window.innerHeight / block)
   fx.width = cols
   fx.height = rows
+  return { cols, rows }
+}
+const clear = () => fxCtx.clearRect(0, 0, fx.width, fx.height)
+const blockSize = (big: number, small: number) => (window.innerWidth < 700 ? small : big)
+
+/** Ordered-dither dissolve: blocks fill in Bayer order, biased into a diagonal sweep. */
+async function dither(color: string, swap: () => void, dir: 1 | -1) {
+  const { cols, rows } = grid(blockSize(28, 18))
   const thr = new Float32Array(cols * rows)
-  for (let y = 0; y < rows; y++) {
+  for (let y = 0; y < rows; y++)
     for (let x = 0; x < cols; x++) {
       const diag = (x / cols + y / rows) / 2
       const d = dir === 1 ? diag : 1 - diag
       thr[y * cols + x] = BAYER8[(y % 8) * 8 + (x % 8)] * 0.45 + d * 0.55
     }
-  }
   const draw = (cover: (v: number) => boolean) => {
-    fxCtx.clearRect(0, 0, cols, rows)
+    clear()
     fxCtx.fillStyle = color
     for (let i = 0; i < thr.length; i++) if (cover(thr[i])) fxCtx.fillRect(i % cols, (i / cols) | 0, 1, 1)
   }
   await tween(0.42, (t) => draw((v) => v < t * 1.02), 'steps(14)')
   swap()
   await tween(0.42, (t) => draw((v) => v > t * 1.02), 'steps(14)')
-  fxCtx.clearRect(0, 0, cols, rows)
+  clear()
 }
 
 /** Diagonal slash: a skewed bar with a bright edge cuts across the screen. */
@@ -51,10 +58,10 @@ async function slashCut(color: string, swap: () => void, dir: 1 | -1) {
   slash.style.visibility = 'visible'
   const from = dir === 1 ? -100 : 100
   gsap.set(slashBar, { xPercent: from, rotate: -22 })
-  gsap.fromTo(stage, { x: 0 }, { x: dir * -14, duration: 0.06, yoyo: true, repeat: 3, ease: 'steps(1)' })
-  await new Promise<void>((r) => gsap.to(slashBar, { xPercent: 0, duration: 0.34, ease: 'power3.in', onComplete: r }))
+  await new Promise<void>((r) => gsap.to(slashBar, { xPercent: 0, duration: 0.32, ease: 'power3.in', onComplete: r }))
+  gsap.fromTo(stage, { x: 0 }, { x: dir * -14, duration: 0.05, yoyo: true, repeat: 3, ease: 'steps(1)' })
   swap()
-  await new Promise<void>((r) => gsap.to(slashBar, { xPercent: -from, duration: 0.4, ease: 'power3.out', onComplete: r }))
+  await new Promise<void>((r) => gsap.to(slashBar, { xPercent: -from, duration: 0.42, ease: 'power3.out', onComplete: r }))
   gsap.set(stage, { x: 0 })
   slash.style.visibility = 'hidden'
 }
@@ -81,6 +88,101 @@ async function crt(oldEl: HTMLElement, newEl: () => HTMLElement, swap: () => voi
   stage.style.background = ''
 }
 
+/** Classic iris: a chunky circle closes on the centre, then opens. */
+async function iris(color: string, swap: () => void) {
+  const { cols, rows } = grid(blockSize(12, 8))
+  const cx = cols / 2
+  const cy = rows / 2
+  const maxR = Math.hypot(cx, cy) + 1
+  const draw = (r: number) => {
+    clear()
+    fxCtx.fillStyle = color
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++) if (Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.0) > r) fxCtx.fillRect(x, y, 1, 1)
+  }
+  await tween(0.4, (t) => draw(maxR * (1 - t)), 'steps(12)')
+  await new Promise((r) => setTimeout(r, 60))
+  swap()
+  await tween(0.42, (t) => draw(maxR * t), 'steps(12)')
+  clear()
+}
+
+/** Water rises with a stepped sine edge, then keeps rising off the top. */
+async function wave(color: string, swap: () => void) {
+  const { cols, rows } = grid(blockSize(14, 10))
+  const amp = Math.max(2, rows * 0.06)
+  const draw = (level: number, t: number, below: boolean) => {
+    clear()
+    for (let x = 0; x < cols; x++) {
+      const edge = Math.round(level + Math.sin(x * 0.32 + t * 9) * amp + Math.sin(x * 0.11 - t * 5) * amp * 0.6)
+      if (below) {
+        fxCtx.fillStyle = color
+        fxCtx.fillRect(x, edge, 1, rows - edge)
+        fxCtx.fillStyle = 'rgba(255,255,255,0.55)'
+        fxCtx.fillRect(x, edge, 1, 1)
+      } else {
+        fxCtx.fillStyle = color
+        fxCtx.fillRect(x, 0, 1, edge)
+        fxCtx.fillStyle = 'rgba(255,255,255,0.4)'
+        fxCtx.fillRect(x, edge - 1, 1, 1)
+      }
+    }
+  }
+  await tween(0.5, (t) => draw(rows + amp * 2 - t * (rows + amp * 4), t, true), 'power1.in')
+  swap()
+  await tween(0.5, (t) => draw(rows + amp * 2 - t * (rows + amp * 4), t + 0.5, false), 'power1.out')
+  clear()
+}
+
+/** RGB-split bars tear across the screen. */
+async function glitch(color: string, swap: () => void) {
+  const { cols, rows } = grid(4)
+  const bars = (cover: number) => {
+    clear()
+    const n = Math.floor(6 + cover * 40)
+    for (let i = 0; i < n; i++) {
+      const y = Math.floor(Math.random() * rows)
+      const h = 1 + Math.floor(Math.random() * rows * 0.06 * (0.3 + cover))
+      const x = Math.floor((Math.random() - 0.3) * cols)
+      fxCtx.fillStyle = ['#ff2bd6', '#22f3ff', color, '#ffffff'][i % 4]
+      fxCtx.fillRect(x, y, Math.floor(cols * (0.2 + Math.random() * 0.9)), h)
+    }
+    if (cover > 0.85) {
+      fxCtx.fillStyle = color
+      fxCtx.globalAlpha = (cover - 0.85) / 0.15
+      fxCtx.fillRect(0, 0, cols, rows)
+      fxCtx.globalAlpha = 1
+    }
+  }
+  const jitter = gsap.to(stage, { x: () => (Math.random() - 0.5) * 24, filter: () => `hue-rotate(${Math.random() * 180}deg)`, duration: 0.05, repeat: 6, ease: 'steps(1)' })
+  await tween(0.32, (t) => bars(t), 'steps(8)')
+  jitter.kill()
+  gsap.set(stage, { clearProps: 'transform,filter' })
+  swap()
+  await tween(0.34, (t) => bars(1 - t), 'steps(8)')
+  clear()
+}
+
+/** Columns drip down like melting wax, then slide away. */
+async function melt(color: string, swap: () => void) {
+  const { cols, rows } = grid(blockSize(16, 10))
+  const delay = Array.from({ length: cols }, () => Math.random() * 0.35)
+  const draw = (t: number, out: boolean) => {
+    clear()
+    fxCtx.fillStyle = color
+    for (let x = 0; x < cols; x++) {
+      const p = Math.min(1, Math.max(0, (t - delay[x]) / 0.65))
+      const e = p * p
+      if (!out) fxCtx.fillRect(x, 0, 1, Math.ceil(e * rows))
+      else fxCtx.fillRect(x, Math.floor(e * rows), 1, rows)
+    }
+  }
+  await tween(0.62, (t) => draw(t, false), 'steps(16)')
+  swap()
+  await tween(0.62, (t) => draw(t, true), 'steps(16)')
+  clear()
+}
+
 async function fade(swap: () => void) {
   await new Promise<void>((r) => gsap.to(stage, { opacity: 0, duration: 0.18, onComplete: r }))
   swap()
@@ -91,6 +193,7 @@ export function runTransition(
   kind: TransitionKind,
   opts: { color: string; dir: 1 | -1; oldEl: HTMLElement; newEl: () => HTMLElement; swap: () => void },
 ): Promise<void> {
+  sound.transition(kind)
   switch (kind) {
     case 'dither':
       return dither(opts.color, opts.swap, opts.dir)
@@ -98,6 +201,14 @@ export function runTransition(
       return slashCut(opts.color, opts.swap, opts.dir)
     case 'crt':
       return crt(opts.oldEl, opts.newEl, opts.swap)
+    case 'iris':
+      return iris(opts.color, opts.swap)
+    case 'wave':
+      return wave(opts.color, opts.swap)
+    case 'glitch':
+      return glitch(opts.color, opts.swap)
+    case 'melt':
+      return melt(opts.color, opts.swap)
     default:
       return fade(opts.swap)
   }

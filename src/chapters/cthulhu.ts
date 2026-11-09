@@ -1,8 +1,10 @@
+import { sound } from '../audio'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
 import type { Sprite } from '../sprites'
 
-const GLYPHS = '᚛᚜ᛟᛞᛝᛜ⸸⸎⸙꙰꙱҈҉ⵙⵘⵚ◬⟁⧖⨀⩎'
+// only glyphs the pixel font actually has, so nothing falls back to tofu
+const GLYPHS = '▓▒░▚▞◢◣◤◥◆◇◎※¤§¶†‡☉☽☾♁♅♆ΔΘΞΨΩλψωж巛彡屮◬'
 
 export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
   const field = el.querySelector<HTMLElement>('.cth-field')!
@@ -37,6 +39,7 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
     field.style.setProperty('--sat', String(0.75 - m * 0.55))
     field.style.filter = `url(#madness) saturate(${0.75 - m * 0.55}) hue-rotate(${m * -40}deg) contrast(${1 + m * 0.3})`
     disp.setAttribute('scale', String(m * m * 46))
+    sound.set('madness', m)
     hint.textContent = san <= 0 ? '你已看见太多。继续向下，离开这里。' : '继续向下……如果你确定的话'
   }
 
@@ -66,16 +69,21 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
 
   return {
     id: 'cthulhu',
-    num: '03',
+    num: '07',
     title: '克苏鲁',
-    color: '#050607',
-    transition: 'crt',
+    color: '#0d1410',
+    transition: 'melt',
+    ambience: 'cthulhu',
     el,
     consume(delta) {
       if (delta > 0 && san <= 0) return false
       if (delta < 0 && san >= 100) return false
+      const before = Math.ceil(san / 10)
       san = Math.max(0, Math.min(100, san - delta / 16))
       apply()
+      const after = Math.ceil(san / 10)
+      if (after < before) sound.tone(110 + after * 22, 0.25, { type: 'sawtooth', vol: 0.03, slide: 90 + after * 15 })
+      if (san <= 0 && before > 0) sound.noise(1.4, { f0: 300, f1: 2400, q: 6, vol: 0.06, attack: 0.6 })
       return true
     },
     enter(dir) {
