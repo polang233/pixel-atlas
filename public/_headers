@@ -1,0 +1,20 @@
+# Response headers for Cloudflare Pages.
+# A request that matches several rules gets the headers of all of them, and a
+# header set twice is joined with a comma, so keep these patterns from overlapping.
+
+# Vite build output: every file name carries a content hash.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The HTML entry is always revalidated, so a new deploy shows up at once.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Unhashed files. The pixel font changes rarely; the chapter sprite strips can
+# change with a deploy, and each .png must match the .json next to it.
+/fonts/*
+  Cache-Control: public, max-age=2592000
+/data/*
+  Cache-Control: public, max-age=3600
