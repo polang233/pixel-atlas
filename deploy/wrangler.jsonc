@@ -1,0 +1,15 @@
+// The site is a static-assets-only Worker: no Worker script, just the Vite
+// build in ../dist. Deploy with `npm run deploy` (see deploy/README.md).
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "pixel-atlas",
+  "compatibility_date": "2026-11-10",
+  "assets": {
+    "directory": "../dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "pixelatlas.org", "custom_domain": true },
+    { "pattern": "www.pixelatlas.org", "custom_domain": true }
+  ]
+}
