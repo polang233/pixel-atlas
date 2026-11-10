@@ -11,6 +11,7 @@
  */
 import { sound } from '../audio'
 import {
+  atlasFetch,
   bytesDownloaded,
   cellInfo,
   loadIndex,
@@ -578,7 +579,7 @@ class TileLevel {
 
 export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Chapter> {
   const meta: AtlasMeta = await loadMeta()
-  const ovBlob = await fetch('/atlas/overview.png').then((r) => r.blob())
+  const ovBlob = await atlasFetch('overview.png').then((r) => r.blob())
   const ovBm = await createImageBitmap(ovBlob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
   const SIDE = meta.side
   const R = Math.sqrt(meta.count / Math.PI)

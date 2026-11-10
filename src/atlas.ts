@@ -16,10 +16,26 @@ export interface AtlasMeta {
   l2: LevelMeta
 }
 
-export const ATLAS = '/atlas'
+/**
+ * Base URL of the atlas, without a trailing slash. Defaults to the copy under
+ * public/atlas; set VITE_ATLAS_BASE (see .env.example) to stream it from another
+ * origin, such as an R2 bucket behind a custom domain.
+ */
+const envBase: string | undefined = import.meta.env.VITE_ATLAS_BASE
+export const ATLAS = (envBase?.trim() || '/atlas').replace(/\/+$/, '')
+
+/**
+ * Every atlas request is made in CORS mode and without credentials, so the
+ * response stays readable when the atlas is on another origin and the bitmaps
+ * decoded from it can be drawn to a canvas or uploaded to WebGL without tainting.
+ */
+const CORS: RequestInit = { mode: 'cors', credentials: 'omit' }
+
+/** Fetch a file of the atlas by its path under the base, e.g. `overview.png`. */
+export const atlasFetch = (path: string): Promise<Response> => fetch(`${ATLAS}/${path}`, CORS)
 
 let metaP: Promise<AtlasMeta> | null = null
-export const loadMeta = (): Promise<AtlasMeta> => (metaP ??= fetch(`${ATLAS}/meta.json`).then((r) => r.json()))
+export const loadMeta = (): Promise<AtlasMeta> => (metaP ??= atlasFetch('meta.json').then((r) => r.json()))
 
 // ---- tile bitmaps (shared by the hero renderer and sprite crops) -------------
 
@@ -40,7 +56,7 @@ export function tileBitmap(level: 1 | 2, tx: number, ty: number, keep = level ==
     bitmapCache.set(url, hit)
     return hit
   }
-  const p = fetch(url)
+  const p = fetch(url, CORS)
     .then((r) => (r.ok ? r.blob() : null))
     .then((b) => {
       if (!b) return null
@@ -92,7 +108,7 @@ export async function cellInfo(cell: number): Promise<CellInfo | null> {
   const key = `${Math.floor(x / n)}_${Math.floor(y / n)}`
   let p = capChunks.get(key)
   if (!p) {
-    p = fetch(`${ATLAS}/cap/${key}.json`).then((r) => (r.ok ? r.json() : []))
+    p = atlasFetch(`cap/${key}.json`).then((r) => (r.ok ? r.json() : []))
     capChunks.set(key, p)
     if (capChunks.size > 64) capChunks.delete(capChunks.keys().next().value!)
   }
@@ -105,7 +121,7 @@ export async function cellInfo(cell: number): Promise<CellInfo | null> {
 // ---- search ---------------------------------------------------------------------
 
 let subjectsP: Promise<[string, number][]> | null = null
-const loadSubjects = (): Promise<[string, number][]> => (subjectsP ??= fetch(`${ATLAS}/subjects.json`).then((r) => r.json()))
+const loadSubjects = (): Promise<[string, number][]> => (subjectsP ??= atlasFetch('subjects.json').then((r) => r.json()))
 
 interface Index {
   subjects: [string, number][]
@@ -117,7 +133,7 @@ let indexP: Promise<Index> | null = null
 export function loadIndex(): Promise<Index> {
   return (indexP ??= Promise.all([
     loadSubjects(),
-    fetch(`${ATLAS}/cells.bin`).then((r) => r.arrayBuffer()),
+    atlasFetch('cells.bin').then((r) => r.arrayBuffer()),
   ]).then(([subjects, buf]) => {
     downloaded += buf.byteLength
     const offsets = new Uint32Array(subjects.length + 1)
