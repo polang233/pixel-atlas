@@ -1,3 +1,4 @@
+import gsap from 'gsap'
 import { sound } from '../audio'
 import { GameShell } from '../game'
 import type { Chapter } from '../types'
@@ -67,147 +68,221 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
     if (active) raf = requestAnimationFrame(frame)
   }
 
-  // ---- mini game: keep the lantern on the eyes -------------------------------------------
-  const PX = 4
-  const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16)
-  const gc = el.querySelector<HTMLCanvasElement>('.cth-game')!
-  const gx = gc.getContext('2d')!
-  const eyeSprites = sprites.filter((s) => /eye|tentacle|squid|void|kraken/.test(s.subject))
-  const eyeCanvas = (eyeSprites.length ? eyeSprites : sprites).map((s) => {
-    const c = document.createElement('canvas')
-    c.width = c.height = 16
-    c.getContext('2d')!.putImageData(s.data, 0, 0)
-    return c
-  })
-  interface Eye { x: number; y: number; img: HTMLCanvasElement; born: number; open: number; light: number; gone: number }
-  const g = { on: false, eyes: [] as Eye[], next: 0, t0: 0, banished: 0, mx: -99, my: -99, last: 0, dead: false }
-  let img: ImageData | null = null
+  // ---- mini game: 禁忌图鉴 — a memory game that fights back as sanity drops -----------------
+  const play = el.querySelector<HTMLElement>('.cth-play')!
+  const board = el.querySelector<HTMLElement>('.cth-board')!
+  const peekBtn = el.querySelector<HTMLButtonElement>('.cth-peek')!
+  interface Card { el: HTMLButtonElement; img: HTMLImageElement; pair: number; spr: Sprite; up: boolean; done: boolean }
+  const g = {
+    on: false,
+    cards: [] as Card[],
+    first: null as Card | null,
+    lock: true,
+    found: 0,
+    pairs: 0,
+    streak: 0,
+    score: 0,
+    moves: 0,
+    last: 0,
+    nextSwap: 0,
+    nextLie: 0,
+    over: false,
+    timers: [] as number[],
+  }
+  const later = (ms: number, fn: () => void) => g.timers.push(window.setTimeout(fn, ms))
+  const flip = (c: Card, up: boolean) => {
+    c.up = up
+    c.el.classList.toggle('is-up', up)
+  }
 
-  gc.addEventListener('pointermove', (e) => {
-    const r = gc.getBoundingClientRect()
-    g.mx = (e.clientX - r.left) / PX
-    g.my = (e.clientY - r.top) / PX
-  })
-  gc.addEventListener('pointerdown', (e) => {
-    const r = gc.getBoundingClientRect()
-    g.mx = (e.clientX - r.left) / PX
-    g.my = (e.clientY - r.top) / PX
-  })
+  function deal() {
+    const cols = el.clientWidth < 700 ? 4 : 6
+    const n = cols === 4 ? 8 : 12
+    const bySubject = new Map<string, Sprite[]>()
+    for (const s of sprites) bySubject.set(s.subject, [...(bySubject.get(s.subject) ?? []), s])
+    const picks = [...bySubject.values()].sort(() => Math.random() - 0.5).slice(0, n).map((list) => list[(Math.random() * list.length) | 0])
+    board.style.setProperty('--cols', String(cols))
+    board.replaceChildren()
+    g.cards = [...picks, ...picks]
+      .map((spr, i) => ({ spr, pair: i % picks.length }))
+      .sort(() => Math.random() - 0.5)
+      .map(({ spr, pair }, i) => {
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.className = 'cth-card'
+        b.style.setProperty('--i', String(i))
+        b.setAttribute('aria-label', '一张盖着的牌')
+        b.innerHTML = `<span class="face back"><i></i></span><span class="face front"><img alt="" src="${spr.url}"></span>`
+        const card: Card = { el: b, img: b.querySelector('img')!, pair, spr, up: false, done: false }
+        b.addEventListener('click', () => pick(card))
+        b.addEventListener('pointerenter', () => !card.up && sound.tick(700 + Math.random() * 200, 0.01))
+        board.append(b)
+        return card
+      })
+    g.pairs = picks.length
+  }
 
-  function gameFrame(now: number) {
-    const w = Math.ceil(el.clientWidth / PX)
-    const h = Math.ceil(el.clientHeight / PX)
-    if (gc.width !== w || gc.height !== h || !img) {
-      gc.width = w
-      gc.height = h
-      img = gx.createImageData(w, h)
+  function pick(c: Card) {
+    if (!g.on || g.lock || g.over || c.up || c.done) return
+    c.img.src = c.spr.url
+    flip(c, true)
+    sound.flip()
+    if (!g.first) {
+      g.first = c
+      return
     }
-    const dt = Math.min(0.05, (now - g.last) / 1000)
-    g.last = now
-    const age = (now - g.t0) / 1000
-    const m = 1 - san / 100
-    // the lantern shrinks and flickers as sanity goes
-    const R = (30 - m * 10) * (1 + (Math.random() - 0.5) * m * 0.25)
-    if (!g.dead) {
-      if (now > g.next) {
-        const S = 32
-        let x = 0
-        let y = 0
-        for (let k = 0; k < 8; k++) {
-          x = S / 2 + Math.random() * (w - S)
-          y = S / 2 + Math.random() * (h - S)
-          if (Math.hypot(x - g.mx, y - g.my) > R * 1.6) break
-        }
-        g.eyes.push({ x, y, img: eyeCanvas[(Math.random() * eyeCanvas.length) | 0], born: now, open: 0, light: 0, gone: 0 })
-        g.next = now + Math.max(550, 2300 - age * 32)
-        sound.eyeOpen()
+    const a = g.first
+    g.first = null
+    g.moves++
+    if (a.pair === c.pair) {
+      a.done = c.done = true
+      later(180, () => {
+        a.el.classList.add('is-done')
+        c.el.classList.add('is-done')
+      })
+      g.found++
+      g.streak++
+      g.score += 100 * g.streak
+      san = Math.min(100, san + 6)
+      sound.banish()
+      if (g.streak > 1) sound.tone(440 + g.streak * 110, 0.12, { type: 'triangle', vol: 0.04, at: 0.1 })
+      if (g.found === g.pairs) {
+        g.over = true
+        g.score += Math.round(san) * 30
+        shell.score(g.score)
+        later(500, () => shell.end(g.score, '图鉴合上了', `${g.moves} 次翻牌认全了 ${g.pairs} 种不可名状之物 · 剩余理智 ${Math.round(san)}`, true))
       }
-      let drain = 0
-      for (const e of g.eyes) {
-        if (e.gone) continue
-        e.open = Math.min(1, e.open + dt / 1.4)
-        const lit = Math.hypot(e.x - g.mx, e.y - g.my) < R * 0.85
-        e.light = lit ? e.light + dt : Math.max(0, e.light - dt * 0.5)
-        if (e.light > 0.45) {
-          e.gone = now
-          g.banished++
-          sound.banish()
-        } else if (e.open >= 1) drain += 2.6
-      }
-      const before = Math.ceil(san / 10)
-      san = Math.max(0, san - drain * dt)
-      if (Math.ceil(san / 10) < before) sound.tone(110 + before * 22, 0.25, { type: 'sawtooth', vol: 0.03, slide: 90 + before * 15 })
-      apply()
-      const score = g.banished * 100 + Math.floor(age) * 10
-      shell.score(score)
-      shell.extra(`<span class="san-chip">SAN ${Math.round(san)}</span> · 封印 ${g.banished} 只眼 · ${Math.floor(age)} 秒`)
-      if (san <= 0) {
-        g.dead = true
-        sound.noise(1.4, { f0: 300, f1: 2400, q: 6, vol: 0.06, attack: 0.6 })
-        shell.end(score, '理智归零', `你封印了 ${g.banished} 只眼睛，撑了 ${Math.floor(age)} 秒。祂们还在看着。`)
-      }
-    }
-    g.eyes = g.eyes.filter((e) => !e.gone || now - e.gone < 500)
-
-    // darkness with a dithered lantern hole
-    const d = img.data
-    for (let y = 0; y < h; y++)
-      for (let x = 0; x < w; x++) {
-        const dist = Math.hypot(x - g.mx, y - g.my) / R
-        const v = Math.min(1, Math.max(0, (dist - 0.55) / 0.45))
-        const q = Math.floor(v * 4 + BAYER4[(y & 3) * 4 + (x & 3)] * 0.95) / 4
-        const o = (y * w + x) * 4
-        d[o] = 3
-        d[o + 1] = 6
-        d[o + 2] = 4
-        d[o + 3] = Math.round(Math.min(1, q) * 246)
-      }
-    gx.putImageData(img, 0, 0)
-    // eyes: a red glint in the dark, the full creature in the light
-    gx.imageSmoothingEnabled = false
-    for (const e of g.eyes) {
-      const lit = Math.hypot(e.x - g.mx, e.y - g.my) < R
-      const S = 32
-      if (e.gone) {
-        const k = (now - e.gone) / 500
-        gx.globalAlpha = 1 - k
-        gx.drawImage(e.img, e.x - (S / 2) * (1 - k), e.y - (S / 2) * (1 + k), S * (1 - k), S * (1 + k))
-        gx.globalAlpha = 1
-        continue
-      }
-      const hh = Math.max(1, Math.round(S * e.open))
-      if (lit) {
-        gx.drawImage(e.img, Math.round(e.x - S / 2), Math.round(e.y - hh / 2), S, hh)
-        // how close it is to being sealed
-        gx.fillStyle = '#9fd18b'
-        gx.fillRect(Math.round(e.x - S / 2), Math.round(e.y + S / 2 + 2), Math.round((S * e.light) / 0.45), 1)
-      } else {
-        const pulse = 0.5 + 0.5 * Math.sin(now / 160 + e.x)
-        gx.fillStyle = e.open >= 1 ? `rgba(255,40,40,${0.6 + pulse * 0.4})` : `rgba(160,40,40,${0.3 + e.open * 0.4})`
-        const sz = e.open >= 1 ? 2 : 1
-        gx.fillRect(Math.round(e.x - 4), Math.round(e.y), sz, sz)
-        gx.fillRect(Math.round(e.x + 3), Math.round(e.y), sz, sz)
-      }
-    }
-    // the lantern ring
-    gx.fillStyle = 'rgba(255, 214, 140, 0.6)'
-    for (let k = 0; k < 48; k++) {
-      const a = (k / 48) * Math.PI * 2
-      gx.fillRect(Math.round(g.mx + Math.cos(a) * R * 0.98), Math.round(g.my + Math.sin(a) * R * 0.98), 1, 1)
+    } else {
+      g.lock = true
+      g.streak = 0
+      san = Math.max(0, san - 9)
+      sound.nothing()
+      board.classList.add('is-wrong')
+      later(720, () => {
+        board.classList.remove('is-wrong')
+        if (g.over) return
+        flip(a, false)
+        flip(c, false)
+        g.lock = false
+      })
     }
   }
 
-  const shell = new GameShell(el, 'cthulhu', '克苏鲁', {
+  /** two face-down cards trade places — you can follow it, if you are watching */
+  function swap() {
+    const pool = g.cards.filter((c) => !c.up && !c.done)
+    if (pool.length < 2 || g.lock) return
+    const a = pool[(Math.random() * pool.length) | 0]
+    let b = a
+    while (b === a) b = pool[(Math.random() * pool.length) | 0]
+    const ra = a.el.getBoundingClientRect()
+    const rb = b.el.getBoundingClientRect()
+    const mark = document.createComment('')
+    a.el.replaceWith(mark)
+    b.el.replaceWith(a.el)
+    mark.replaceWith(b.el)
+    for (const [c, from, to] of [[a, ra, rb], [b, rb, ra]] as const) {
+      c.el.classList.add('is-moving')
+      gsap.fromTo(c.el, { x: from.left - to.left, y: from.top - to.top }, {
+        x: 0, y: 0, duration: reducedMotion ? 0 : 0.55, ease: 'power2.inOut', overwrite: true,
+        onComplete: () => {
+          c.el.classList.remove('is-moving')
+          gsap.set(c.el, { clearProps: 'transform' })
+        },
+      })
+    }
+    sound.whisper()
+  }
+
+  /** a card shows you something that is not what it holds */
+  function lie() {
+    const pool = g.cards.filter((c) => !c.up && !c.done)
+    if (!pool.length || g.lock || g.first) return
+    const c = pool[(Math.random() * pool.length) | 0]
+    const other = g.cards.filter((o) => o.pair !== c.pair)
+    c.img.src = other[(Math.random() * other.length) | 0].spr.url
+    c.el.classList.add('is-up', 'is-lie')
+    sound.eyeOpen()
+    later(420, () => {
+      c.el.classList.remove('is-lie')
+      if (c.up) c.img.src = c.spr.url
+      else {
+        c.el.classList.remove('is-up')
+        later(260, () => (c.img.src = c.spr.url))
+      }
+    })
+  }
+
+  function peek() {
+    if (!g.on || g.lock || g.over || san <= 12) return
+    g.lock = true
+    san -= 12
+    const down = g.cards.filter((c) => !c.up && !c.done)
+    down.forEach((c) => c.el.classList.add('is-up'))
+    sound.sonar()
+    later(1100, () => {
+      down.forEach((c) => !c.up && c.el.classList.remove('is-up'))
+      g.lock = false
+    })
+  }
+  peekBtn.addEventListener('click', peek)
+  window.addEventListener('keydown', (e) => {
+    if (!g.on || e.key !== ' ' || e.repeat) return
+    e.preventDefault()
+    peek()
+  })
+
+  function gameFrame(now: number) {
+    const dt = Math.min(0.05, (now - g.last) / 1000)
+    g.last = now
+    if (g.over) return
+    const m = 1 - san / 100
+    if (!g.lock || g.first) san = Math.max(0, san - dt * 0.55)
+    apply()
+    board.style.setProperty('--mad', m.toFixed(3))
+    play.dataset.stage = m > 0.7 ? '3' : m > 0.5 ? '2' : m > 0.3 ? '1' : '0'
+    peekBtn.disabled = san <= 12
+    if (m > 0.3 && now > g.nextSwap) {
+      g.nextSwap = now + 9000 - m * 5000
+      swap()
+    }
+    if (m > 0.6 && now > g.nextLie) {
+      g.nextLie = now + 5200 + Math.random() * 3000
+      lie()
+    }
+    shell.score(g.score)
+    shell.extra(`<span class="san-chip">SAN ${Math.round(san)}</span> · 配对 ${g.found}/${g.pairs}${g.streak > 1 ? ` · 连对 ×${g.streak}` : ''}`)
+    if (san <= 0) {
+      g.over = true
+      g.cards.forEach((c) => c.el.classList.add('is-up'))
+      sound.noise(1.4, { f0: 300, f1: 2400, q: 6, vol: 0.06, attack: 0.6 })
+      later(600, () => shell.end(g.score, '理智归零', `认出了 ${g.found} / ${g.pairs} 种 · 剩下的，已经认识你了。`, false))
+    }
+  }
+
+  const shell = new GameShell(el, 'cthulhu-memory', '禁忌图鉴', {
     start() {
+      g.timers.forEach(clearTimeout)
       san = 100
       apply()
+      deal()
       const now = performance.now()
-      Object.assign(g, { on: true, eyes: [], next: now + 900, t0: now, banished: 0, last: now, dead: false, mx: el.clientWidth / PX / 2, my: el.clientHeight / PX / 2 })
-      gc.hidden = false
+      Object.assign(g, { on: true, first: null, lock: true, found: 0, streak: 0, score: 0, moves: 0, last: now, nextSwap: now + 12000, nextLie: now + 9000, over: false, timers: [] })
+      play.hidden = false
+      play.dataset.stage = '0'
+      // a short look at everything, then the book closes
+      later(350, () => g.cards.forEach((c, i) => later(i * 28, () => c.el.classList.add('is-up'))))
+      later(3300, () => {
+        g.cards.forEach((c) => c.el.classList.remove('is-up'))
+        g.lock = false
+        g.last = performance.now()
+      })
     },
     stop() {
       g.on = false
-      gc.hidden = true
+      g.timers.forEach(clearTimeout)
+      play.hidden = true
+      board.replaceChildren()
       san = 100
       apply()
     },
@@ -224,6 +299,7 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
     ambience: 'cthulhu',
     el,
     playing: () => shell.playing,
+    atEnd: () => san <= 0,
     consume(delta) {
       if (delta > 0 && san <= 0) return false
       if (delta < 0 && san >= 100) return false

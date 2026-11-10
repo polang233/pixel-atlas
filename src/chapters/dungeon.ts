@@ -4,6 +4,8 @@
  * is made of pixels.
  */
 import { sound } from '../audio'
+import { GameShell } from '../game'
+import { createCrawl } from './dungeon-game'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
@@ -12,7 +14,7 @@ const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) =>
 const LIGHT_PX = 8 // one light-map texel = 8 css px, so the light itself is pixelated
 const MAX_TORCHES = 4
 
-export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
+export function createDungeon(el: HTMLElement, sprites: Sprite[], hero?: Sprite): Chapter {
   const floor = el.querySelector<HTMLElement>('.dungeon-floor')!
   const dark = el.querySelector<HTMLCanvasElement>('.dungeon-dark')!
   const dctx = dark.getContext('2d')!
@@ -66,7 +68,7 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
   let img: ImageData | null = null
 
   function updateCount() {
-    countEl.textContent = `火把 ${planted.length}/${MAX_TORCHES} · 点击地面插一支`
+    countEl.textContent = `已插 ${planted.length}/${MAX_TORCHES}`
     sound.set('fire', planted.length / MAX_TORCHES)
   }
 
@@ -78,7 +80,7 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     tip.style.top = `${e.clientY + 18}px`
   })
   el.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).closest('button, a')) return
+    if (shell.playing || (e.target as HTMLElement).closest('button, a, .game-card')) return
     const r = el.getBoundingClientRect()
     const x = e.clientX - r.left
     const y = e.clientY - r.top
@@ -98,7 +100,32 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     updateCount()
   })
 
+  // ---- mini game: a torch-lit maze crawl ---------------------------------------------------
+  const gameCanvas = el.querySelector<HTMLCanvasElement>('.dungeon-game')!
+  const crawl = createCrawl(gameCanvas, sprites, hero, {
+    score: (n) => shell.score(n),
+    extra: (html) => shell.extra(html),
+    end: (score, title, sub, won) => shell.end(score, title, sub, won),
+  })
+  const shell: GameShell = new GameShell(el, 'dungeon', '摸黑寻宝', {
+    start() {
+      gameCanvas.hidden = false
+      tip.style.opacity = '0'
+      crawl.start()
+    },
+    stop() {
+      crawl.stop()
+      gameCanvas.hidden = true
+      updateCount()
+    },
+  })
+
   function frame(t: number) {
+    if (shell.playing) {
+      crawl.frame(t)
+      if (active) raf = requestAnimationFrame(frame)
+      return
+    }
     const w = Math.ceil(el.clientWidth / LIGHT_PX)
     const h = Math.ceil(el.clientHeight / LIGHT_PX)
     if (dark.width !== w || dark.height !== h) {
@@ -161,6 +188,7 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     transition: 'slash',
     ambience: 'dungeon',
     el,
+    playing: () => shell.playing,
     enter() {
       active = true
       updateCount()
@@ -171,6 +199,7 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       active = false
       cancelAnimationFrame(raf)
       tip.style.opacity = '0'
+      shell.quit()
     },
   }
 }

@@ -225,9 +225,10 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
   canvas.addEventListener('click', () => sound.eraJingle(stage))
   window.addEventListener('keydown', (e) => {
     if (!el.classList.contains('is-active') || e.target instanceof HTMLInputElement) return
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') setStage(stage + 1)
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') setStage(stage - 1)
-    else return
+    const dir = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+    // at either end the key is left alone, so the page can offer the next section
+    if (!dir || stage + dir < 0 || stage + dir >= STAGES.length) return
+    setStage(stage + dir)
     e.preventDefault()
   })
   ditherBox.addEventListener('change', () => {
@@ -243,11 +244,12 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
     color: '#14121c',
     transition: 'dither',
     el,
+    atEnd: () => stage >= STAGES.length - 1,
     consume(delta) {
       const now = performance.now()
-      if (delta > 0 && stage >= STAGES.length - 1) return true
-      if (delta < 0 && stage <= 0) return true
       if (now < lockUntil) return true
+      if (delta > 0 && stage >= STAGES.length - 1) return false
+      if (delta < 0 && stage <= 0) return false
       acc += delta
       if (Math.abs(acc) > 160) {
         setStage(stage + Math.sign(acc))

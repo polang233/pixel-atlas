@@ -23,6 +23,8 @@ export interface Chapter {
   enter?(dir: 1 | -1): void
   leave?(): void
   focusSearch?(): void
+  /** false while the chapter still has more of itself to scroll through (default: true) */
+  atEnd?(): boolean
   /** true while a mini game owns the keyboard and scroll */
   playing?(): boolean
 }

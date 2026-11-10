@@ -28,6 +28,10 @@
         <button type="button" class="wb-step" data-step="1" aria-label="下一个世界">▶</button>
       </nav>
 
+      <button type="button" class="nextbar pix" hidden>
+        <span class="nb-label"></span><b></b><i class="nb-arrow" aria-hidden="true"></i><em class="nb-fill" aria-hidden="true"></em>
+      </button>
+
       <footer class="hud hud-bottom">
         <span class="hint"></span>
       </footer>
@@ -44,7 +48,7 @@
             <p class="eyebrow">VOL.1 · CC0 · 1,409,404 SPRITES</p>
             <h1>PIXEL<br />ATLAS</h1>
             <p class="hero-sub">像素图鉴 · <b>140 万</b>张 16×16 素材</p>
-            <p class="hero-intro">每一个点是一张素材的平均色。灰色沉在核心，彩色按色相绕成光环——暖色占了大半圈，因为游戏世界里木头、皮革、火光最多。</p>
+            <p class="hero-intro">每一个点是一张素材的平均色。灰色沉在核心，彩色按色相绕成光环——暖色占了大半圈，因为游戏世界里最多的是木头、皮革和火光。</p>
             <form class="hero-search" autocomplete="off" role="search">
               <span class="pix" aria-hidden="true">&gt;</span>
               <input type="search" name="q" placeholder="搜索：史莱姆 / sword / 蓝色宝箱 / #ff4d6d" aria-label="搜索素材" enterkeyhint="go" />
@@ -112,22 +116,25 @@
 
         <!-- W1 卡带 -->
         <section class="chapter ch-cart" data-id="cart" aria-label="卡带">
-          <canvas class="cart-gl" aria-label="一个自动游玩的横版游戏画面，按住看原始像素"></canvas>
+          <div class="cart-screen" data-own-touch>
+            <canvas class="cart-gl" aria-label="一块显像管屏幕：分割线左边是原始像素，右边是显像管效果"></canvas>
+            <div class="cart-split pix" aria-hidden="true"><span>原始像素</span><span>显像管</span></div>
+          </div>
           <div class="cart-copy world-copy">
             <p class="eyebrow pix">WORLD 01 · CARTRIDGE</p>
             <h2 class="pix">卡带</h2>
-            <p>一张 16×16 的骑士、一只史莱姆、一枚金币，就能拼出一整关横版游戏。画面套着显像管滤镜：扫描线、荧光条、光晕和曲面玻璃——你记忆里的“像素感”，有一半来自这块玻璃。</p>
-            <p class="dim pix">按住画面看原始像素</p>
-            <div class="world-actions">
-              <button type="button" class="chip hot game-start">▶ 玩一局</button>
-              <button type="button" class="chip cart-crt" aria-pressed="true">CRT 滤镜 开</button>
+            <p>同样的像素，隔着一块显像管玻璃就是另一幅画。扫描线把方块切成细条，荧光条把颜色拆成红绿蓝，光晕让亮部溢出来，曲面玻璃再把四角压弯——你记忆里的“像素感”，有一半是这块玻璃给的。</p>
+            <p class="world-hint pix">在屏幕上左右移动：金线左边是原始像素</p>
+            <div class="fx-row" role="group" aria-label="显像管的四种成分">
+              <button type="button" class="chip" data-fx="scan" aria-pressed="true">扫描线</button>
+              <button type="button" class="chip" data-fx="mask" aria-pressed="true">荧光条</button>
+              <button type="button" class="chip" data-fx="bloom" aria-pressed="true">光晕</button>
+              <button type="button" class="chip" data-fx="curve" aria-pressed="true">曲面</button>
             </div>
-            <p class="game-howto pix dim"><kbd>←→</kbd> 移动 <kbd>空格</kbd> 跳（按久跳得高）· 踩扁史莱姆，走到宝箱</p>
-          </div>
-          <div class="cart-pad" data-own-touch>
-            <button type="button" data-k="l" aria-label="左">◀</button>
-            <button type="button" data-k="r" aria-label="右">▶</button>
-            <button type="button" data-k="j" class="j" aria-label="跳">A</button>
+            <div class="world-actions">
+              <button type="button" class="chip hot game-start">▶ 玩一局：光枪靶场</button>
+            </div>
+            <p class="game-howto pix dim">点击开枪（或 <kbd>方向键</kbd> 瞄准 <kbd>空格</kbd> 开枪）· 连续命中涨倍率 · 别打头顶带 ✓ 的自己人</p>
           </div>
         </section>
 
@@ -170,26 +177,30 @@
           <div class="dungeon-floor"></div>
           <div class="dungeon-planted"></div>
           <canvas class="dungeon-dark"></canvas>
-          <div class="dungeon-copy">
+          <div class="dungeon-copy world-copy">
             <p class="eyebrow pix">WORLD 02 · DUNGEON</p>
             <h2 class="pix">地牢</h2>
-            <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>。光源越少，玩家越想往前走。</p>
-            <p class="dim pix">移动鼠标：你就是火把 · <span class="dungeon-count"></span></p>
+            <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>。光照不到的地方不用画，玩家会自己把它想象得更可怕；光源越少，人越想往前走。</p>
+            <p class="world-hint pix">移动鼠标：你就是火把 · 点击地面插一支 · <span class="dungeon-count"></span></p>
+            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：摸黑寻宝</button></div>
+            <p class="game-howto pix dim"><kbd>WASD</kbd> / <kbd>方向键</kbd> 或按住鼠标带路 · 火把既是视野也是生命 · 找钥匙，开门，再下一层</p>
           </div>
           <div class="dungeon-tip pix" role="status"></div>
+          <canvas class="dungeon-game" data-own-touch hidden></canvas>
+          <p class="dungeon-say pix" role="status"></p>
         </section>
 
         <!-- 05 深海 -->
         <section class="chapter ch-ocean" data-id="ocean" aria-label="深海">
           <canvas class="oc-canvas" data-own-touch></canvas>
-          <div class="oc-copy">
+          <div class="oc-copy world-copy">
             <p class="eyebrow pix">WORLD 03 · DEEP SEA</p>
             <h2 class="pix">深海</h2>
             <p class="oc-zone pix"></p>
             <p class="oc-desc"></p>
-            <p class="dim pix">向下滚动下潜 · 点击发出声呐</p>
+            <p class="world-hint pix">向下滚动下潜 · 点击水面发出声呐</p>
             <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：大鱼吃小鱼</button></div>
-            <p class="game-howto pix dim">鼠标带路 · 吃比你小的，躲开比你大的 · 越长越大就越潜越深</p>
+            <p class="game-howto pix dim">鼠标带路（或 <kbd>方向键</kbd>）· 吃比你小的，躲开比你大的 · 越长越大，潜得越深</p>
           </div>
           <div class="oc-meter pix" aria-hidden="true">
             <div class="oc-ruler"><span style="top:0">0</span><span style="top:5%">200</span><span style="top:25%">1000</span><span style="top:75%">3000</span><span style="top:100%">4000</span><i class="oc-marker"></i></div>
@@ -200,16 +211,16 @@
         <!-- 06 霓虹 -->
         <section class="chapter ch-neon" data-id="neon" aria-label="霓虹">
           <canvas class="neon-canvas" data-own-touch></canvas>
-          <div class="neon-copy">
+          <div class="neon-copy world-copy">
             <p class="eyebrow pix">WORLD 04 · NEON</p>
             <h2 class="pix">霓虹</h2>
-            <p>霓虹风把颜色收成几种高饱和的光——洋红、青、紫——其余全压进黑里。每块招牌都是程序把素材“霓虹化”的结果：只留轮廓和最强的内边，再加一圈光晕。像素的硬边，正好就是灯管。</p>
-            <p class="dim pix">靠近招牌通电 · 滚动逐个点亮 · <span class="neon-count"></span></p>
+            <p>霓虹风把颜色收成几种高饱和的光——洋红、青、紫——其余全压进黑里。每块招牌都是程序把一张素材“霓虹化”的结果：只留轮廓和最强的内边，再加一圈光晕。像素的硬边，正好就是灯管。</p>
+            <p class="world-hint pix">靠近招牌通电 · 滚动逐个点亮 · <span class="neon-count"></span></p>
             <div class="world-actions">
               <button type="button" class="chip hot game-start">▶ 玩一局：节拍通电</button>
               <button type="button" class="chip neon-raw" aria-pressed="false">看原图</button>
             </div>
-            <p class="game-howto pix dim">灯条落到线上时按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd>（或点那一列）· 连击越多，城市越亮</p>
+            <p class="game-howto pix dim">灯条冲到线上时按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd>（或点那条车道）· 每连击 10 次，全城过载一次</p>
           </div>
           <p class="neon-judge pix" hidden></p>
           <div class="neon-tip" hidden></div>
@@ -224,16 +235,19 @@
             </filter>
           </svg>
           <div class="cth-field"></div>
-          <div class="cth-copy">
+          <div class="cth-copy world-copy">
             <p class="eyebrow pix">WORLD 05 · COSMIC HORROR</p>
             <h2 class="pix glitch" data-text="不可名状">不可名状</h2>
-            <p class="cth-text" data-src="克苏鲁风格从不把怪物画清楚。低饱和的墨绿与淤紫、不对称的轮廓、太多的眼睛——16×16 的模糊恰好替你留白，剩下的交给玩家的想象。"></p>
+            <p class="cth-text" data-src="克苏鲁风格从不把怪物画清楚。低饱和的墨绿与淤紫、不对称的轮廓、多出来的眼睛——16×16 的模糊恰好替你留白，剩下的交给玩家的想象。"></p>
             <div class="san"><span class="pix">SAN</span><div class="san-bar"><i></i></div><b class="pix san-num">100</b></div>
-            <p class="dim pix cth-hint">继续向下……如果你确定的话</p>
-            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：守夜</button></div>
-            <p class="game-howto pix dim">黑暗里会睁开眼睛。把提灯照在它身上直到它闭上——每一只睁着的眼都在吃你的理智</p>
+            <p class="world-hint pix cth-hint">继续向下……如果你确定的话</p>
+            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：禁忌图鉴</button></div>
+            <p class="game-howto pix dim">翻开两张相同的牌 · 翻错、拖延都会掉理智 · 理智越低，牌越不老实：它们会换位置，还会骗你</p>
           </div>
-          <canvas class="cth-game" data-own-touch hidden></canvas>
+          <div class="cth-play" hidden>
+            <div class="cth-board" data-own-touch></div>
+            <button type="button" class="chip cth-peek">窥视全部 · −12 SAN <kbd>空格</kbd></button>
+          </div>
         </section>
 
         <!-- 08 带走 -->
@@ -242,7 +256,7 @@
           <div class="outro-box" data-scroll>
             <p class="eyebrow pix">GET · 背包</p>
             <h2 class="pix">带走它们</h2>
-            <p>140 万张素材都是 CC0。下面是它们接下来的去处——都还在建设中。</p>
+            <p>140 万张素材全部 CC0，拿去用不必署名。下面是它们接下来的几个去处，有的还在路上。</p>
             <div class="outro-cards">
               <article class="outro-card">
                 <h3 class="pix">GitHub 图集</h3>

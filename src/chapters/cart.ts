@@ -1,11 +1,13 @@
 /**
- * 卡带 · a side-scrolling platformer drawn at 256×144 with dataset sprites,
- * shown through a CRT shader (scanlines, aperture grille, bloom, curved
- * glass). In the showcase it plays itself like an arcade attract mode;
- * press start and it is yours.
+ * 卡带 · one 256×144 screen of dataset sprites, shown through a CRT shader
+ * whose four ingredients (scanlines, aperture grille, bloom, curved glass)
+ * can be switched on and off one by one. In the showcase a divider follows the
+ * pointer: raw pixels on its left, the tube on its right. Press start and the
+ * same screen becomes a light-gun gallery.
  */
 import { sound } from '../audio'
 import { GameShell } from '../game'
+import { drawText } from '../pixelfont'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
@@ -13,11 +15,8 @@ import { reducedMotion } from '../types'
 const SW = 256
 const SH = 144
 const T = 16
-const ROWS = SH / T
-const LW = 150
-const GRAV = 980
-const RUN = 92
-const JUMP = 338
+const GROUND = 116
+const ROUND = 50
 
 const VERT = `#version 300 es
 in vec2 p;
@@ -28,7 +27,9 @@ precision highp float;
 uniform sampler2D uTex;
 uniform vec2 uRes;
 uniform vec2 uSrc;
-uniform float uOn;
+uniform vec4 uFx;     // scanlines, aperture grille, bloom, curved glass
+uniform float uSplit; // screen x of the raw | tube divider, < 0 for none
+uniform float uFlash;
 uniform float uTime;
 out vec4 o;
 
@@ -52,49 +53,40 @@ void main() {
   vec2 size = uSrc * scale;
   vec2 origin = (uRes - size) * 0.5;
   vec2 uv = (f - origin) / size;
-  float s = uOn;
+  vec4 fx = uFx * (uSplit < 0.0 ? 1.0 : step(uSplit, f.x));
 
   vec2 cc = uv - 0.5;
-  uv = 0.5 + cc * (1.0 + s * dot(cc, cc) * 0.2);
+  uv = 0.5 + cc * (1.0 + fx.w * dot(cc, cc) * 0.2);
   vec3 bezel = vec3(0.02, 0.018, 0.03);
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) { o = vec4(bezel, 1.0); return; }
 
-  vec3 col = fetchRow(uv, s);
-  if (s > 0.0) {
+  vec3 col = fetchRow(uv, max(fx.x, fx.y));
+  if (fx.z > 0.0) {
     vec3 g = vec3(0.0);
     for (int i = -3; i <= 3; i++) for (int j = -2; j <= 2; j++) g += texture(uTex, uv + vec2(float(i), float(j)) * 1.4 / uSrc).rgb;
     g /= 35.0;
-    col = mix(col, max(col, g), 0.3 * s) + g * g * 0.22 * s;
+    col = mix(col, max(col, g), 0.3) + g * g * 0.22;
   }
   float py = fract(uv.y * uSrc.y) - 0.5;
   float lum = dot(col, vec3(0.299, 0.587, 0.114));
   float sigma = mix(0.2, 0.44, clamp(lum, 0.0, 1.0));
   float beam = exp(-py * py / (2.0 * sigma * sigma));
-  col *= mix(1.0, beam * 1.22, s);
+  col *= mix(1.0, beam * 1.22, fx.x);
   float stripe = mod(floor(f.x / max(1.0, scale / 3.0)), 3.0);
   vec3 mask = stripe < 1.0 ? vec3(1.0, 0.6, 0.6) : stripe < 2.0 ? vec3(0.6, 1.0, 0.6) : vec3(0.6, 0.6, 1.0);
-  col *= mix(vec3(1.0), mask * 1.25, s);
+  col *= mix(vec3(1.0), mask * 1.25, fx.y);
   vec2 v = uv - 0.5;
-  col *= mix(1.0, 1.0 - dot(v, v) * 1.5, s);
-  col *= 1.0 - s * 0.02 * sin(uTime * 110.0);
+  col *= mix(1.0, 1.0 - dot(v, v) * 1.5, fx.w);
+  col *= 1.0 - fx.x * 0.02 * sin(uTime * 110.0);
   float band = smoothstep(0.0, 0.05, 0.05 - abs(fract(uv.y * 0.8 - uTime * 0.15) - 0.5));
-  col += s * band * 0.03;
+  col += fx.x * band * 0.03;
   vec2 corner = abs(v) - (0.5 - 0.04);
   float round_ = length(max(corner, 0.0));
-  if (s > 0.0) col = mix(col, bezel, smoothstep(0.035, 0.045, round_) * s);
+  col = mix(col, bezel, smoothstep(0.035, 0.045, round_) * fx.w);
+  if (uSplit >= 0.0 && abs(f.x - uSplit) < max(1.0, scale * 0.2)) col = vec3(1.0, 0.8, 0.3);
+  col = mix(col, vec3(1.0), uFlash);
   o = vec4(col, 1.0);
 }`
-
-// 3×5 pixel font for the in-game HUD
-const FONT: Record<string, string> = {
-  '0': '111101101101111', '1': '010110010010111', '2': '111001111100111', '3': '111001111001111', '4': '101101111001001',
-  '5': '111100111001111', '6': '111100111101111', '7': '111001010010010', '8': '111101111101111', '9': '111101111001111',
-  A: '010101111101101', B: '110101110101110', C: '111100100100111', D: '110101101101110', E: '111100110100111',
-  F: '111100110100100', G: '111100101101111', H: '101101111101101', I: '111010010010111', K: '101101110101101',
-  L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '111101101101111', P: '111101111100100',
-  R: '110101110101101', S: '111100111001111', T: '111010010010010', U: '101101101101111', V: '101101101101010',
-  W: '101101111111101', Y: '101101010010010', x: '000101010101000', ':': '000010000010000', '!': '010010010000010',
-}
 
 function mulberry32(a: number) {
   return () => {
@@ -106,56 +98,35 @@ function mulberry32(a: number) {
   }
 }
 
-interface Body { x: number; y: number; w: number; h: number; vx: number; vy: number; ground: boolean }
-interface Slime extends Body { alive: boolean; dead: number; kind: number }
-interface Bat { x: number; y0: number; ph: number; alive: boolean; dead: number }
-interface Coin { x: number; y: number; taken: boolean }
-interface Bit { x: number; y: number; vx: number; vy: number; life: number; c: string }
-
-function buildLevel(seed: number) {
-  const rnd = mulberry32(seed)
-  const map = new Uint8Array(LW * ROWS)
-  const coins: Coin[] = []
-  const slimes: Slime[] = []
-  const bats: Bat[] = []
-  const fill = (x0: number, x1: number, h: number) => {
-    for (let x = x0; x < Math.min(LW, x1); x++) for (let y = ROWS - h; y < ROWS; y++) map[y * LW + x] = 1
-  }
-  const top = (h: number) => (ROWS - h) * T
-  let gh = 2
-  fill(0, 12, gh)
-  let x = 12
-  while (x < LW - 16) {
-    if (rnd() < 0.26) {
-      const g = 2 + (rnd() < 0.45 ? 1 : 0)
-      for (let k = 0; k <= g; k++) coins.push({ x: (x + k) * T - 4, y: top(gh) - 30 - Math.sin((k / g) * Math.PI) * 18, taken: false })
-      x += g
-    }
-    const len = 4 + Math.floor(rnd() * 7)
-    const up = rnd() < 0.5 ? 0 : rnd() < 0.55 ? 1 : -1
-    gh = Math.max(2, Math.min(4, gh + up))
-    fill(x, x + len, gh)
-    if (len >= 6 && rnd() < 0.7) slimes.push({ x: (x + len / 2) * T, y: top(gh) - 10, w: 12, h: 10, vx: rnd() < 0.5 ? -20 : 20, vy: 0, ground: false, alive: true, dead: 0, kind: Math.floor(rnd() * 3) })
-    const r = rnd()
-    if (r < 0.34 && len >= 5) {
-      const py = ROWS - gh - 4
-      for (let k = 1; k < 4; k++) map[py * LW + x + k] = 2
-      for (let k = 1; k < 4; k++) coins.push({ x: (x + k) * T, y: py * T - 16, taken: false })
-    } else if (r < 0.6) {
-      for (let k = 1; k < Math.min(4, len - 1); k++) coins.push({ x: (x + k) * T, y: top(gh) - 22, taken: false })
-    }
-    if (rnd() < 0.28 && x > 24) bats.push({ x: (x + len / 2) * T, y0: top(gh) - 56, ph: rnd() * 6, alive: true, dead: 0 })
-    x += len
-  }
-  fill(x, LW, gh)
-  const goal = { x: (LW - 6) * T, y: top(gh) - 16 }
-  return { map, coins, slimes, bats, goal }
+type Kind = 'slime' | 'bat' | 'ghost' | 'goblin' | 'coin' | 'star' | 'knight' | 'heart' | 'dragon'
+interface Target {
+  kind: Kind
+  img: HTMLCanvasElement
+  x: number
+  y: number
+  vx: number
+  vy: number
+  size: number
+  t: number
+  hp: number
+  pts: number
+  /** seconds since it was shot; 0 while alive */
+  dead: number
+  hurt: number
+  phase: number
+  spot: number
+  gone: boolean
 }
+interface Bit { x: number; y: number; vx: number; vy: number; life: number; c: string }
+interface Pop { x: number; y: number; s: string; life: number; c: string }
+
+const SPOTS = [44, 128, 212]
+const FX_KEYS = ['scan', 'mask', 'bloom', 'curve'] as const
 
 export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
   const canvas = el.querySelector<HTMLCanvasElement>('.cart-gl')!
-  const crtBtn = el.querySelector<HTMLButtonElement>('.cart-crt')!
-  const pad = el.querySelector<HTMLElement>('.cart-pad')!
+  const splitTag = el.querySelector<HTMLElement>('.cart-split')!
+  const fxButtons = [...el.querySelectorAll<HTMLButtonElement>('[data-fx]')]
 
   const src = document.createElement('canvas')
   src.width = SW
@@ -163,21 +134,42 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
   const g = src.getContext('2d')!
   g.imageSmoothingEnabled = false
 
-  const pick = (re: RegExp, k = 0) => sprites.filter((s) => re.test(s.subject))[k] ?? sprites[k]
   const sc = (s: Sprite) => {
     const c = document.createElement('canvas')
     c.width = c.height = 16
     c.getContext('2d')!.putImageData(s.data, 0, 0)
     return c
   }
-  const knight = sc(pick(/knight/))
-  const slimeImg = [sc(pick(/^slime/)), sc(pick(/king slime/)), sc(pick(/slime/, 2))]
-  const coinImg = sc(pick(/coin/))
-  const heartImg = sc(pick(/heart/))
-  const chestImg = sc(pick(/chest/))
-  const batImg = sc(pick(/bat/))
-  const castleImg = sc(pick(/castle/))
-  const ghostImg = sc(pick(/ghost/))
+  const all = (re: RegExp) => {
+    const list = sprites.filter((s) => re.test(s.subject))
+    return (list.length ? list : sprites.slice(0, 1)).map(sc)
+  }
+  const IMG: Record<Kind, HTMLCanvasElement[]> = {
+    slime: all(/slime/),
+    bat: all(/bat/),
+    ghost: all(/ghost/),
+    goblin: all(/goblin|skeleton/),
+    coin: all(/coin/),
+    star: all(/star/),
+    knight: all(/knight|wizard/),
+    heart: all(/heart/).slice(0, 1),
+    dragon: all(/dragon/),
+  }
+  const castleImg = all(/castle/)[0]
+  const shroomImg = all(/toadstool/)
+  /** a white silhouette of each sprite, for the hit flash */
+  const whiteOf = new Map<HTMLCanvasElement, HTMLCanvasElement>()
+  for (const list of Object.values(IMG))
+    for (const img of list) {
+      const c = document.createElement('canvas')
+      c.width = c.height = 16
+      const cx = c.getContext('2d')!
+      cx.drawImage(img, 0, 0)
+      cx.globalCompositeOperation = 'source-in'
+      cx.fillStyle = '#fff'
+      cx.fillRect(0, 0, 16, 16)
+      whiteOf.set(img, c)
+    }
 
   // tile textures, drawn once
   const tile = (draw: (c: CanvasRenderingContext2D) => void) => {
@@ -206,378 +198,421 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     c.fillStyle = '#2b6b45'
     for (let x = 0; x < T; x += 3) c.fillRect(x, 4, 1, 1 + (x % 2))
   })
-  const plank = tile((c) => {
-    c.fillStyle = '#b8743e'
-    c.fillRect(0, 0, T, T)
-    c.fillStyle = '#e3a35e'
-    c.fillRect(1, 1, 14, 1)
-    c.fillStyle = '#6e3d22'
-    c.fillRect(0, 15, T, 1)
-    c.fillRect(15, 0, 1, T)
-    c.fillRect(0, 7, T, 1)
-    c.fillStyle = '#8f522d'
-    c.fillRect(4, 3, 1, 3)
-    c.fillRect(10, 10, 1, 3)
-  })
-  const stars = Array.from({ length: 46 }, (_, i) => [((i * 97) % 512) + Math.random() * 8, Math.random() * 64, Math.random() * 10])
+  const bush = (() => {
+    const c = document.createElement('canvas')
+    c.width = 30
+    c.height = 16
+    const b = c.getContext('2d')!
+    const blob = (col: string, dy: number) => {
+      b.fillStyle = col
+      for (const [cx, cy, r] of [[8, 10, 7], [16, 7, 7], [23, 10, 6]])
+        for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r) b.fillRect(cx + x, cy + y + dy, 1, 1)
+    }
+    blob('#1f5a3c', 1)
+    blob('#2f8250', 0)
+    b.fillStyle = '#6fd27f'
+    for (const [x, y] of [[6, 5], [9, 7], [15, 2], [18, 4], [22, 6], [13, 8], [25, 9]]) b.fillRect(x, y, 1, 1)
+    return c
+  })()
+  const stars = Array.from({ length: 46 }, (_, i) => [((i * 97) % SW) + Math.random() * 4, Math.random() * 64, Math.random() * 10])
 
-  // ---- state -------------------------------------------------------------------
-  let L = buildLevel(7)
-  const P: Body & { face: number; coyote: number; buffer: number; inv: number; safeX: number; safeY: number; squash: number } = {
-    x: 24, y: 80, w: 10, h: 14, vx: 0, vy: 0, ground: false, face: 1, coyote: 0, buffer: 0, inv: 0, safeX: 24, safeY: 80, squash: 0,
-  }
-  let cx = 0
+  // ---- state ---------------------------------------------------------------------
+  let targets: Target[] = []
   let bits: Bit[] = []
-  let hearts = 3
-  let score = 0
-  let coins = 0
-  let timeLeft = 200
+  let pops: Pop[] = []
   let demo = true
   let done = false
-  const keys = { l: false, r: false, j: false }
-  let jumpHeld = false
-  let crtOn = true
-  let raw = 0
+  let elapsed = 0
+  let timeLeft = ROUND
+  let spawnT = 0
+  let score = 0
+  let combo = 0
+  let bestCombo = 0
+  let shots = 0
+  let hitsN = 0
+  let dragons = 0
+  let flash = 0
+  let shake = 0
+  let recoil = 0
+  const aim = { x: SW / 2, y: SH / 2, on: false }
+  const keys = { x: 0, y: 0 }
+  const fx = { scan: true, mask: true, bloom: true, curve: true }
+  let split = -1
+  let splitTarget = 0.5
+  let pointerIn = false
 
-  const solid = (tx: number, ty: number) => {
-    if (tx < 0 || tx >= LW) return true
-    if (ty < 0 || ty >= ROWS) return false
-    return L.map[ty * LW + tx] > 0
-  }
-  const hits = (b: Body) => {
-    for (let tx = Math.floor(b.x / T); tx <= Math.floor((b.x + b.w - 0.01) / T); tx++)
-      for (let ty = Math.floor(b.y / T); ty <= Math.floor((b.y + b.h - 0.01) / T); ty++) if (solid(tx, ty)) return true
-    return false
-  }
-  function move(b: Body, dt: number) {
-    b.x += b.vx * dt
-    if (hits(b)) {
-      if (b.vx > 0) b.x = Math.floor((b.x + b.w) / T) * T - b.w - 0.01
-      else b.x = (Math.floor(b.x / T) + 1) * T + 0.01
-      b.vx = 0
-    }
-    b.y += b.vy * dt
-    b.ground = false
-    if (hits(b)) {
-      if (b.vy > 0) {
-        b.y = Math.floor((b.y + b.h) / T) * T - b.h - 0.01
-        b.ground = true
-      } else b.y = (Math.floor(b.y / T) + 1) * T + 0.01
-      b.vy = 0
-    }
-  }
-
+  const mult = () => 1 + Math.min(6, Math.floor(combo / 4)) * 0.5
   const burst = (x: number, y: number, c: string, n = 8, up = 80) => {
-    for (let i = 0; i < n; i++) bits.push({ x, y, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * up - 30, life: 0.5 + Math.random() * 0.3, c })
+    for (let i = 0; i < n; i++) bits.push({ x, y, vx: (Math.random() - 0.5) * 140, vy: -Math.random() * up - 20, life: 0.4 + Math.random() * 0.4, c })
+  }
+  const one = <V,>(list: V[]) => list[(Math.random() * list.length) | 0]
+
+  function spawn(kind: Kind) {
+    const left = Math.random() < 0.5
+    const dir = left ? 1 : -1
+    const base: Target = {
+      kind, img: one(IMG[kind]), x: left ? -12 : SW + 12, y: 0, vx: 0, vy: 0, size: 16, t: 0, hp: 1, pts: 100,
+      dead: 0, hurt: 0, phase: Math.random() * 6, spot: -1, gone: false,
+    }
+    const speed = 1 + Math.min(1, elapsed / ROUND) * 0.5
+    switch (kind) {
+      case 'slime':
+        Object.assign(base, { y: GROUND - 7, vx: dir * (28 + Math.random() * 26) * speed, pts: 100 })
+        break
+      case 'knight':
+        Object.assign(base, { y: GROUND - 8, vx: dir * 30, pts: -300 })
+        break
+      case 'bat':
+        Object.assign(base, { y: 28 + Math.random() * 50, vx: dir * (46 + Math.random() * 34) * speed, pts: 150 })
+        break
+      case 'ghost':
+        Object.assign(base, { x: 30 + Math.random() * (SW - 60), y: 34 + Math.random() * 50, vx: dir * 14, pts: 250 })
+        break
+      case 'goblin': {
+        const free = SPOTS.map((_, i) => i).filter((i) => !targets.some((q) => q.spot === i))
+        if (!free.length) return
+        const spot = one(free)
+        Object.assign(base, { spot, x: SPOTS[spot], y: GROUND + 4, pts: 200 })
+        break
+      }
+      case 'coin':
+        Object.assign(base, { x: 30 + Math.random() * (SW - 60), y: SH + 8, vx: (Math.random() - 0.5) * 50, vy: -(250 + Math.random() * 50), pts: 120 })
+        break
+      case 'heart':
+        Object.assign(base, { x: 30 + Math.random() * (SW - 60), y: SH + 8, vx: 0, vy: -34, pts: 0 })
+        break
+      case 'star':
+        Object.assign(base, { x: left ? 20 + Math.random() * 60 : SW - 20 - Math.random() * 60, y: -10, vx: dir * 96, vy: 84, pts: 500 })
+        break
+      case 'dragon':
+        Object.assign(base, { size: 32, y: 44, vx: dir * 26, hp: 4, pts: 1000, x: left ? -20 : SW + 20 })
+        break
+    }
+    targets.push(base)
+  }
+
+  function director(dt: number) {
+    spawnT -= dt
+    if (spawnT > 0) return
+    const u = Math.min(1, elapsed / ROUND)
+    spawnT = (demo ? 1.1 : 0.95 - u * 0.5) * (0.65 + Math.random() * 0.7)
+    const table: [Kind, number][] = [
+      ['slime', 5], ['bat', 3 + u * 2], ['ghost', 1 + u * 2], ['goblin', 2 + u * 2], ['coin', 2], ['knight', demo ? 2 : 1.1 + u],
+      ['star', demo ? 0.3 : 0.5], ['heart', demo ? 0 : timeLeft < 30 ? 0.4 : 0],
+    ]
+    let r = Math.random() * table.reduce((a, [, w]) => a + w, 0)
+    for (const [k, w] of table) {
+      r -= w
+      if (r <= 0) {
+        spawn(k)
+        break
+      }
+    }
+    if (!demo && dragons < 2 && elapsed > 16 + dragons * 20) {
+      dragons++
+      spawn('dragon')
+      sound.tone(70, 0.9, { type: 'sawtooth', vol: 0.06, slide: 140, attack: 0.3 })
+    }
   }
 
   function reset(isDemo: boolean) {
-    L = buildLevel(isDemo ? 7 : 7 + Math.floor(Math.random() * 1000))
-    Object.assign(P, { x: 24, y: 80, vx: 0, vy: 0, face: 1, inv: 0, safeX: 24, safeY: 80, coyote: 0, buffer: 0 })
+    targets = []
     bits = []
-    hearts = 3
-    score = 0
-    coins = 0
-    timeLeft = 200
+    pops = []
     demo = isDemo
     done = false
-    cx = 0
+    elapsed = 0
+    timeLeft = ROUND
+    spawnT = 0.4
+    score = combo = bestCombo = shots = hitsN = dragons = 0
+    flash = shake = 0
   }
 
-  function hurt() {
-    if (P.inv > 0) return
-    sound.hurt()
-    if (!demo) hearts--
-    P.inv = 1.4
-    P.vy = -200
-    P.vx = -P.face * 120
-    if (hearts <= 0) finish(false)
+  const hittable = (q: Target) => !q.dead && !(q.kind === 'ghost' && Math.sin(q.t * 2.2 + q.phase) < -0.1)
+  const centre = (q: Target): [number, number] => {
+    if (q.kind === 'bat') return [q.x, q.y + Math.sin(q.t * 5 + q.phase) * 9]
+    if (q.kind === 'dragon') return [q.x, q.y + Math.sin(q.t * 1.6) * 10]
+    if (q.kind === 'ghost') return [q.x, q.y + Math.sin(q.t * 1.3 + q.phase) * 5]
+    if (q.kind === 'slime') return [q.x, q.y - Math.abs(Math.sin(q.t * 6 + q.phase)) * 5]
+    return [q.x, q.y]
   }
-  function finish(won: boolean) {
-    if (done) return
-    done = true
-    if (demo) {
-      setTimeout(() => demo && reset(true), 1200)
+
+  function fire(x: number, y: number) {
+    if (demo || done) return
+    shots++
+    flash = 1
+    recoil = 1
+    sound.shot()
+    let hit: Target | null = null
+    for (let i = targets.length - 1; i >= 0 && !hit; i--) {
+      const q = targets[i]
+      if (!hittable(q)) continue
+      const [cx, cy] = centre(q)
+      const r = q.size / 2 + 2
+      if (Math.abs(x - cx) < r && Math.abs(y - cy) < r) hit = q
+    }
+    if (!hit) {
+      combo = 0
+      burst(x, y, '#8a86a0', 3, 30)
       return
     }
-    if (won) score += 1000 + Math.ceil(timeLeft) * 10
-    shell.score(score)
-    shell.end(score, won ? '宝箱到手！' : '骑士倒下了', won ? `收集 ${coins} 枚金币 · 剩余时间 ${Math.ceil(timeLeft)} 秒` : `收集了 ${coins} 枚金币`, won)
+    const [cx, cy] = centre(hit)
+    if (hit.kind === 'knight') {
+      hit.dead = 0.001
+      combo = 0
+      score = Math.max(0, score - 300)
+      timeLeft = Math.max(0, timeLeft - 3)
+      shake = 0.3
+      sound.hurt()
+      burst(cx, cy, '#ff4d6d', 10)
+      pops.push({ x: cx, y: cy - 10, s: '-300', life: 1, c: '#ff4d6d' })
+      return
+    }
+    hitsN++
+    hit.hp--
+    hit.hurt = 0.12
+    if (hit.hp > 0) {
+      sound.stomp()
+      burst(cx, cy, '#ffb347', 6)
+      shake = 0.12
+      return
+    }
+    hit.dead = 0.001
+    combo++
+    bestCombo = Math.max(bestCombo, combo)
+    if (hit.kind === 'heart') {
+      timeLeft = Math.min(ROUND, timeLeft + 5)
+      sound.grow()
+      burst(cx, cy, '#ff4d6d', 12)
+      pops.push({ x: cx, y: cy - 10, s: '+5 SEC', life: 1.1, c: '#ff8aa0' })
+      return
+    }
+    const gain = Math.round(hit.pts * mult())
+    score += gain
+    pops.push({ x: cx, y: cy - 10, s: '+' + gain, life: 0.9, c: hit.pts >= 500 ? '#ffd84d' : '#ffffff' })
+    const colour = { slime: '#7fe08a', bat: '#b48cff', ghost: '#c8f4ff', goblin: '#9be06a', coin: '#ffd84d', star: '#ffd84d', dragon: '#ff7a2b', knight: '', heart: '' }[hit.kind]
+    burst(cx, cy, colour, hit.kind === 'dragon' ? 36 : 12, hit.kind === 'dragon' ? 160 : 90)
+    if (hit.kind === 'coin' || hit.kind === 'star') sound.coin()
+    else sound.stomp()
+    if (hit.kind === 'dragon') {
+      shake = 0.5
+      sound.win()
+    }
+    if (combo > 0 && combo % 4 === 0) sound.tone(660 + combo * 20, 0.12, { type: 'triangle', vol: 0.04, slide: 1320 })
   }
 
-  // ---- the attract-mode pilot ---------------------------------------------------------
-  function pilot() {
-    const foot = Math.floor((P.y + P.h + 2) / T)
-    const front = P.x + P.w
-    const gap = !solid(Math.floor((front + 12) / T), foot) && !solid(Math.floor((front + 4) / T), foot)
-    const wall = solid(Math.floor((front + 6) / T), Math.floor((P.y + P.h - 3) / T))
-    const enemy = L.slimes.some((s) => s.alive && s.x - front > -2 && s.x - front < 30 && Math.abs(s.y - P.y) < 18)
-    keys.r = true
-    keys.l = false
-    if (P.ground && (gap || wall || enemy)) keys.j = true
-    else if (P.vy > 0) keys.j = false
+  function finish() {
+    if (done) return
+    done = true
+    const acc = shots ? Math.round((hitsN / shots) * 100) : 0
+    const won = score >= 5000
+    shell.score(score)
+    shell.end(score, won ? '神枪手！' : '时间到', `命中 ${hitsN} / ${shots} 枪 · 准确率 ${acc}% · 最高连击 ${bestCombo}`, won)
   }
 
   function step(dt: number) {
-    if (done) {
-      bits.forEach((b) => (b.life -= dt))
-      return
-    }
-    if (demo) pilot()
-    else timeLeft -= dt
-    if (!demo && timeLeft <= 0) {
-      timeLeft = 0
-      finish(false)
-    }
-    // run with a little acceleration
-    const want = (keys.r ? 1 : 0) - (keys.l ? 1 : 0)
-    if (want) P.face = want
-    const acc = P.ground ? 900 : 520
-    if (want) P.vx += Math.sign(want * RUN - P.vx) * Math.min(acc * dt, Math.abs(want * RUN - P.vx))
-    else P.vx -= Math.sign(P.vx) * Math.min(Math.abs(P.vx), (P.ground ? 1100 : 300) * dt)
-    // jump: coyote time + input buffer + variable height
-    P.coyote = P.ground ? 0.1 : P.coyote - dt
-    if (keys.j && !jumpHeld) P.buffer = 0.12
-    else P.buffer -= dt
-    if (P.buffer > 0 && P.coyote > 0) {
-      P.vy = -JUMP
-      P.coyote = 0
-      P.buffer = 0
-      P.squash = -0.25
-      sound.jump()
-    }
-    if (!keys.j && P.vy < -120) P.vy = -120
-    jumpHeld = keys.j
-    P.vy = Math.min(420, P.vy + GRAV * dt)
-    const wasGround = P.ground
-    move(P, dt)
-    if (P.ground && !wasGround) {
-      P.squash = 0.25
-      burst(P.x + P.w / 2, P.y + P.h, '#c9b8d8', 3, 20)
-    }
-    if (P.ground && solid(Math.floor((P.x + 1) / T), Math.floor((P.y + P.h + 2) / T)) && solid(Math.floor((P.x + P.w - 1) / T), Math.floor((P.y + P.h + 2) / T))) {
-      P.safeX = P.x
-      P.safeY = P.y
-    }
-    P.inv = Math.max(0, P.inv - dt)
-    P.squash *= Math.exp(-dt * 12)
-    if (P.y > SH + 24) {
-      sound.tone(500, 0.5, { type: 'square', vol: 0.05, slide: 80 })
-      if (!demo) hearts--
-      if (hearts <= 0) return finish(false)
-      Object.assign(P, { x: P.safeX - 20, y: P.safeY - 4, vx: 0, vy: 0, inv: 1.4, buffer: 0 })
-      if (hits(P)) P.x = P.safeX
-    }
-
-    for (const s of L.slimes) {
-      if (!s.alive) {
-        s.dead += dt
-        continue
-      }
-      if (Math.abs(s.x - P.x) > SW * 1.2) continue
-      s.vy = Math.min(420, s.vy + GRAV * dt)
-      const vx = s.vx
-      move(s, dt)
-      if (s.vx === 0) s.vx = -vx
-      // turn at ledges
-      const ahead = s.vx > 0 ? s.x + s.w + 1 : s.x - 1
-      if (s.ground && !solid(Math.floor(ahead / T), Math.floor((s.y + s.h + 2) / T))) s.vx = -s.vx
-      if (s.y > SH + 20) s.alive = false
-      if (overlap(P, s)) {
-        if (P.vy > 0 && P.y + P.h - s.y < 9) {
-          s.alive = false
-          P.vy = -240
-          score += 200
-          sound.stomp()
-          burst(s.x + 6, s.y + 6, '#7fe08a', 10)
-        } else hurt()
-      }
-    }
-    for (const b of L.bats) {
-      if (!b.alive) {
-        b.dead += dt
-        continue
-      }
-      b.ph += dt
-      const bx = b.x + Math.sin(b.ph * 0.8) * 24
-      const by = b.y0 + Math.sin(b.ph * 2.6) * 12
-      const box = { x: bx + 2, y: by + 4, w: 12, h: 8, vx: 0, vy: 0, ground: false }
-      if (overlap(P, box)) {
-        if (P.vy > 0 && P.y + P.h - box.y < 8) {
-          b.alive = false
-          P.vy = -240
-          score += 300
-          sound.stomp()
-          burst(bx + 8, by + 8, '#b48cff', 10)
-        } else hurt()
-      }
-    }
-    for (const c of L.coins) {
-      if (c.taken) continue
-      if (P.x < c.x + 12 && P.x + P.w > c.x + 4 && P.y < c.y + 14 && P.y + P.h > c.y + 2) {
-        c.taken = true
-        coins++
-        score += 100
-        sound.coin()
-        burst(c.x + 8, c.y + 8, '#ffd84d', 5, 50)
-      }
-    }
-    if (P.x + P.w > L.goal.x + 2 && P.y + P.h > L.goal.y) {
-      burst(L.goal.x + 8, L.goal.y, '#ffd84d', 24, 140)
-      finish(true)
-    }
+    flash = Math.max(0, flash - dt * 9)
+    shake = Math.max(0, shake - dt)
+    recoil = Math.max(0, recoil - dt * 7)
     for (const b of bits) {
-      b.vy += 300 * dt
+      b.vy += 320 * dt
       b.x += b.vx * dt
       b.y += b.vy * dt
       b.life -= dt
     }
     bits = bits.filter((b) => b.life > 0)
-    if (!demo) {
-      shell.score(score)
+    for (const p of pops) {
+      p.y -= 22 * dt
+      p.life -= dt
     }
-    const target = Math.max(0, Math.min(LW * T - SW, P.x - SW * 0.38 + P.face * 18))
-    cx += (target - cx) * Math.min(1, dt * 5)
+    pops = pops.filter((p) => p.life > 0)
+    if (done) return
+    elapsed += dt
+    if (!demo) {
+      timeLeft -= dt
+      aim.x = Math.max(2, Math.min(SW - 3, aim.x + keys.x * 150 * dt))
+      aim.y = Math.max(2, Math.min(SH - 3, aim.y + keys.y * 150 * dt))
+      if (timeLeft <= 0) {
+        timeLeft = 0
+        finish()
+      }
+      shell.score(score)
+      shell.extra(combo >= 4 ? `连击 ${combo} · 倍率 ×${mult()}` : '')
+    }
+    director(dt)
+    for (const q of targets) {
+      q.t += dt
+      q.hurt = Math.max(0, q.hurt - dt)
+      if (q.dead) {
+        q.dead += dt
+        if (q.dead > 0.3) q.gone = true
+        continue
+      }
+      q.x += q.vx * dt
+      q.y += q.vy * dt
+      if (q.kind === 'coin') q.vy += 430 * dt
+      if (q.kind === 'goblin') {
+        const stay = 1.5 - Math.min(0.6, elapsed * 0.012)
+        const up = Math.min(1, q.t / 0.2) - Math.max(0, (q.t - stay) / 0.2)
+        q.y = GROUND + 4 - up * 13
+        if (q.t > stay + 0.2) q.gone = true
+      }
+      if (q.kind === 'ghost' && q.t > 7) q.gone = true
+      if (q.x < -40 || q.x > SW + 40 || q.y > SH + 30 || q.y < -30) q.gone = true
+    }
+    targets = targets.filter((q) => !q.gone)
   }
-  const overlap = (a: Body, b: Body) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 
   // ---- drawing --------------------------------------------------------------------
-  function text(s: string, x: number, y: number, color: string, shadow = true) {
-    for (const pass of shadow ? [1, 0] : [0]) {
-      g.fillStyle = pass ? '#000' : color
-      let xx = x
-      for (const ch of s) {
-        const gl = FONT[ch]
-        if (gl) for (let i = 0; i < 15; i++) if (gl[i] === '1') g.fillRect(xx + (i % 3) + pass, y + Math.floor(i / 3) + pass, 1, 1)
-        xx += 4
-      }
+  const text = (s: string, x: number, y: number, color: string) => drawText(g, s, x, y, color)
+  const centred = (s: string, y: number, color: string) => text(s, Math.round((SW - s.length * 4) / 2), y, color)
+
+  function drawTarget(q: Target, t: number) {
+    const [cx, cy] = centre(q)
+    let w = q.size
+    let h = q.size
+    if (q.kind === 'slime') {
+      const hop = Math.abs(Math.sin(q.t * 6 + q.phase))
+      h = q.size * (0.85 + hop * 0.15)
+      w = q.size * (1.15 - hop * 0.15)
+    } else if (q.kind === 'bat' || q.kind === 'dragon') h = q.size * (Math.floor(t * 9 + q.phase) % 2 ? 0.8 : 1)
+    else if (q.kind === 'coin') w = Math.max(2, Math.abs(Math.cos(q.t * 7)) * q.size)
+    else if (q.kind === 'knight') h = q.size - (Math.floor(q.t * 8) % 2)
+    if (q.dead) {
+      const k = q.dead / 0.3
+      w *= 1 + k * 0.6
+      h *= 1 - k * 0.8
+    }
+    g.save()
+    if (q.kind === 'ghost') g.globalAlpha = q.dead ? 1 : Math.max(0.12, 0.55 + 0.45 * Math.sin(q.t * 2.2 + q.phase))
+    if (q.vx > 0) {
+      g.translate(Math.round(cx) * 2, 0)
+      g.scale(-1, 1)
+    }
+    const img = q.hurt > 0 || (q.dead && q.dead < 0.1) ? whiteOf.get(q.img)! : q.img
+    g.drawImage(img, Math.round(cx - w / 2), Math.round(cy + q.size / 2 - h), Math.round(w), Math.round(h))
+    g.restore()
+    if (q.kind === 'dragon' && !q.dead) {
+      g.fillStyle = '#000'
+      g.fillRect(Math.round(cx - 9), Math.round(cy - 21), 18, 3)
+      g.fillStyle = '#ff7a2b'
+      g.fillRect(Math.round(cx - 8), Math.round(cy - 20), q.hp * 4, 1)
+    }
+    if (q.kind === 'knight' && !q.dead && !demo) {
+      // friendly marker: a tiny green tick above the head
+      g.fillStyle = '#7fe08a'
+      g.fillRect(Math.round(cx - 2), Math.round(cy - 12), 1, 1)
+      g.fillRect(Math.round(cx - 1), Math.round(cy - 11), 1, 1)
+      g.fillRect(Math.round(cx), Math.round(cy - 12), 1, 1)
+      g.fillRect(Math.round(cx + 1), Math.round(cy - 13), 1, 1)
     }
   }
 
   function draw(t: number) {
+    g.save()
+    if (shake > 0) g.translate(Math.round((Math.random() - 0.5) * shake * 10), Math.round((Math.random() - 0.5) * shake * 8))
     const bands = ['#120c2c', '#1d1b4f', '#2f3a83', '#4a64b8', '#7b97dc', '#b7c7ee']
     for (let b = 0; b < bands.length; b++) {
       g.fillStyle = bands[b]
-      g.fillRect(0, b * 14, SW, 14)
+      g.fillRect(-8, b * 14, SW + 16, 14)
       if (b < bands.length - 1) {
         g.fillStyle = bands[b + 1]
         for (let x = 0; x < SW; x++) for (let y = 2; y < 4; y++) if ((x + y) % 2 === 0) g.fillRect(x, b * 14 + 10 + y, 1, 1)
       }
     }
     g.fillStyle = bands[5]
-    g.fillRect(0, 84, SW, SH - 84)
-    const sx = cx * 0.05
+    g.fillRect(-8, 84, SW + 16, SH - 84)
     for (const [x, y, p] of stars) {
       if (Math.sin(t * 2 + p) > -0.3) {
         g.fillStyle = '#fff'
-        g.fillRect(Math.floor((((x - sx) % 512) + 512) % 512) % SW, y | 0, 1, 1)
+        g.fillRect(x | 0, y | 0, 1, 1)
       }
     }
-    // moon
     g.fillStyle = '#fff3d6'
     for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) if (dx * dx + dy * dy <= 36 && (dx - 3) ** 2 + (dy + 2) ** 2 > 26) g.fillRect(212 + dx, 20 + dy, 1, 1)
-    // far hills + castle, near hills (parallax)
     g.fillStyle = '#2b3d6b'
-    for (let x = 0; x < SW; x++) {
-      const wx = x + cx * 0.2
-      const h = 30 + Math.round(Math.sin(wx * 0.03) * 10 + Math.sin(wx * 0.09) * 4)
+    for (let x = -8; x < SW + 8; x++) {
+      const h = 30 + Math.round(Math.sin(x * 0.03 + 1) * 10 + Math.sin(x * 0.09) * 4)
       g.fillRect(x, 112 - h, 1, h + 40)
     }
-    const castleX = Math.round(((180 - cx * 0.2) % 600 + 600) % 600) - 40
-    g.drawImage(castleImg, castleX, 52, 32, 32)
+    g.drawImage(castleImg, 96, 54, 32, 32)
     g.fillStyle = '#22305a'
-    for (let x = 0; x < SW; x++) {
-      const wx = x + cx * 0.45
-      const h = 16 + Math.round(Math.sin(wx * 0.05 + 2) * 7)
+    for (let x = -8; x < SW + 8; x++) {
+      const h = 16 + Math.round(Math.sin(x * 0.05 + 2) * 7)
       g.fillRect(x, 120 - h, 1, h + 30)
     }
-    // a ghost drifting in the background, half transparent
-    g.globalAlpha = 0.35 + 0.15 * Math.sin(t * 2)
-    g.drawImage(ghostImg, Math.round(((300 - cx * 0.3 + t * 6) % 420 + 420) % 420) - 30, 40 + Math.round(Math.sin(t * 1.3) * 4))
-    g.globalAlpha = 1
-
-    const ox = Math.round(cx)
-    const tx0 = Math.floor(ox / T)
-    for (let tx = tx0; tx <= tx0 + SW / T + 1; tx++)
-      for (let ty = 0; ty < ROWS; ty++) {
-        const v = tx >= 0 && tx < LW ? L.map[ty * LW + tx] : 0
-        if (!v) continue
-        const img = v === 2 ? plank : ty > 0 && L.map[(ty - 1) * LW + tx] === 1 ? dirt : grass
-        g.drawImage(img, tx * T - ox, ty * T)
-      }
-    // goal chest with a sparkle
-    g.drawImage(chestImg, L.goal.x - ox, L.goal.y)
-    if (Math.floor(t * 4) % 2) {
-      g.fillStyle = '#ffd84d'
-      g.fillRect(L.goal.x - ox + 7, L.goal.y - 5, 1, 3)
-      g.fillRect(L.goal.x - ox + 6, L.goal.y - 4, 3, 1)
+    const air: Kind[] = ['ghost', 'bat', 'dragon', 'star', 'coin', 'heart']
+    for (const q of targets) if (air.includes(q.kind)) drawTarget(q, t)
+    for (const q of targets) if (q.kind === 'goblin') drawTarget(q, t)
+    for (let x = -T; x < SW + T; x += T) {
+      g.drawImage(grass, x, GROUND)
+      g.drawImage(dirt, x, GROUND + T)
     }
-    for (const c of L.coins) {
-      if (c.taken) continue
-      const w = Math.max(2, Math.round(Math.abs(Math.cos(t * 4 + c.x * 0.05)) * 16))
-      g.drawImage(coinImg, Math.round(c.x - ox + (16 - w) / 2), Math.round(c.y + Math.sin(t * 3 + c.x) * 1.5), w, 16)
-    }
-    for (const s of L.slimes) {
-      if (!s.alive && s.dead > 0.4) continue
-      const hop = s.alive ? Math.abs(Math.sin(t * 6 + s.x)) : 0
-      const sq = s.alive ? 1 - hop * 0.15 : 0.3
-      const w = 16 * (2 - sq)
-      const h = 16 * sq
-      g.save()
-      if (s.vx < 0) {
-        g.translate(Math.round(s.x - ox + 6) * 2, 0)
-        g.scale(-1, 1)
-      }
-      g.drawImage(slimeImg[s.kind], Math.round(s.x - ox + 6 - w / 2), Math.round(s.y + s.h - h - hop * 3), Math.round(w), Math.round(h))
-      g.restore()
-    }
-    for (const b of L.bats) {
-      if (!b.alive && b.dead > 0.4) continue
-      const bx = b.x + Math.sin(b.ph * 0.8) * 24
-      const by = b.y0 + Math.sin(b.ph * 2.6) * 12
-      const flap = Math.floor(t * 10) % 2 ? 12 : 16
-      g.drawImage(batImg, Math.round(bx - ox), Math.round(by + (16 - flap) / 2), 16, b.alive ? flap : 4)
-    }
-    // player
-    if (!(P.inv > 0 && Math.floor(t * 20) % 2)) {
-      const run = P.ground && Math.abs(P.vx) > 10 ? Math.floor(t * 12) % 2 : 0
-      const sw = Math.round(16 * (1 + P.squash))
-      const sh = Math.round(16 * (1 - P.squash))
-      const px = Math.round(P.x - ox + P.w / 2)
-      const py = Math.round(P.y + P.h)
-      g.save()
-      if (P.face < 0) {
-        g.translate(px * 2, 0)
-        g.scale(-1, 1)
-      }
-      g.drawImage(knight, px - sw / 2, py - sh - run + 1, sw, sh)
-      g.restore()
-    }
+    SPOTS.forEach((x) => g.drawImage(bush, x - 15, GROUND - 11))
+    shroomImg.forEach((m, i) => g.drawImage(m, [14, 84, 170][i % 3], GROUND - 7, 8, 8))
+    for (const q of targets) if (q.kind === 'slime' || q.kind === 'knight') drawTarget(q, t)
     for (const b of bits) {
       g.fillStyle = b.c
-      g.fillRect(Math.round(b.x - ox), Math.round(b.y), 2, 2)
+      g.fillRect(Math.round(b.x), Math.round(b.y), 2, 2)
     }
-    // HUD
+    for (const p of pops) text(p.s, Math.round(p.x - p.s.length * 2), Math.round(p.y), p.c)
+    g.restore()
+
     if (demo) {
-      text('DEMO', 6, 6, '#9ad1ff')
-      if (Math.floor(t * 1.6) % 2) text('PRESS START', 106, 64, '#ffd84d')
-      text('SCORE ' + String(score).padStart(5, '0'), 178, 6, '#ffffff')
+      // a test card strip: the classic colour bars, as sprites would never show them
+      const bars = ['#ffffff', '#ffe14d', '#4de1ff', '#58e06a', '#ff5fd2', '#ff4d5a', '#4d6bff']
+      bars.forEach((c, i) => {
+        g.fillStyle = c
+        g.fillRect(6 + i * 6, 6, 6, 5)
+      })
+      text('CART 01', 52, 6, '#ffffff')
+      text('CH 03', SW - 28, 6, '#9ad1ff')
+      if (Math.floor(t * 1.6) % 2) centred('PRESS START', 66, '#ffd84d')
     } else {
-      for (let i = 0; i < 3; i++) {
-        g.globalAlpha = i < hearts ? 1 : 0.25
-        g.drawImage(heartImg, 4 + i * 11, 4, 10, 10)
+      const u = timeLeft / ROUND
+      g.fillStyle = '#000'
+      g.fillRect(5, 5, 82, 5)
+      g.fillStyle = u < 0.2 && Math.floor(t * 6) % 2 ? '#ffffff' : u < 0.2 ? '#ff4d6d' : '#7fe08a'
+      g.fillRect(6, 6, Math.round(80 * u), 3)
+      text('TIME ' + String(Math.ceil(timeLeft)).padStart(2, '0'), 92, 5, '#ffffff')
+      text('SCORE ' + String(score).padStart(6, '0'), SW - 54, 5, '#ffffff')
+      if (combo >= 4) text('x' + mult().toFixed(1), SW - 22, 13, '#ffd84d')
+      if (elapsed < 1.6) centred('READY!', 60, '#ffd84d')
+      // crosshair
+      const ax = Math.round(aim.x)
+      const ay = Math.round(aim.y)
+      const r = 5 + Math.round(recoil * 3)
+      for (const pass of [1, 0]) {
+        g.fillStyle = pass ? '#000' : '#fff'
+        const o = pass
+        g.fillRect(ax - r + o, ay + o, 3, 1)
+        g.fillRect(ax + r - 2 + o, ay + o, 3, 1)
+        g.fillRect(ax + o, ay - r + o, 1, 3)
+        g.fillRect(ax + o, ay + r - 2 + o, 1, 3)
       }
-      g.globalAlpha = 1
-      g.drawImage(coinImg, 42, 3, 12, 12)
-      text('x' + String(coins).padStart(2, '0'), 55, 7, '#ffd84d')
-      text('TIME ' + String(Math.ceil(timeLeft)).padStart(3, '0'), 100, 7, '#ffffff')
-      text('SCORE ' + String(score).padStart(5, '0'), 178, 7, '#ffffff')
+      g.fillStyle = '#ff4d6d'
+      g.fillRect(ax, ay, 1, 1)
     }
   }
 
   // ---- GL: CRT ----------------------------------------------------------------------
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false })
   let present = (_t: number) => {}
+  /** canvas css position → source pixel, through the same curve the shader bends with */
+  function toSource(clientX: number, clientY: number): [number, number] {
+    const r = canvas.getBoundingClientRect()
+    const scale = Math.min(r.width / SW, r.height / SH)
+    let u = (clientX - r.left - (r.width - SW * scale) / 2) / (SW * scale)
+    let v = (clientY - r.top - (r.height - SH * scale) / 2) / (SH * scale)
+    if (fx.curve) {
+      const cx = u - 0.5
+      const cy = v - 0.5
+      const k = 1 + (cx * cx + cy * cy) * 0.2
+      u = 0.5 + cx * k
+      v = 0.5 + cy * k
+    }
+    return [u * SW, v * SH]
+  }
   if (gl) {
     const prog = gl.createProgram()!
     for (const [type, s] of [
@@ -607,7 +642,9 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     const U = (n: string) => gl.getUniformLocation(prog, n)
     gl.uniform2f(U('uSrc'), SW, SH)
     const uRes = U('uRes')
-    const uOn = U('uOn')
+    const uFx = U('uFx')
+    const uSplit = U('uSplit')
+    const uFlash = U('uFlash')
     const uTime = U('uTime')
     present = (t) => {
       const dpr = Math.min(window.devicePixelRatio, 2)
@@ -620,60 +657,64 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
       gl.viewport(0, 0, w, h)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src)
       gl.uniform2f(uRes, w, h)
-      gl.uniform1f(uOn, crtOn && !raw ? 1 : 0)
+      gl.uniform4f(uFx, +fx.scan, +fx.mask, +fx.bloom, +fx.curve)
+      gl.uniform1f(uSplit, split < 0 ? -1 : split * w)
+      gl.uniform1f(uFlash, flash * 0.55)
       gl.uniform1f(uTime, t)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
   }
 
   // ---- input ------------------------------------------------------------------------
-  const keyMap: Record<string, keyof typeof keys> = {
-    ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r',
-    ' ': 'j', ArrowUp: 'j', w: 'j', W: 'j', k: 'j', K: 'j', z: 'j', Z: 'j',
-  }
+  fxButtons.forEach((b) =>
+    b.addEventListener('click', () => {
+      const k = b.dataset.fx as (typeof FX_KEYS)[number]
+      fx[k] = !fx[k]
+      b.setAttribute('aria-pressed', String(fx[k]))
+      sound.relay()
+    }),
+  )
+  canvas.addEventListener('pointermove', (e) => {
+    const r = canvas.getBoundingClientRect()
+    pointerIn = true
+    splitTarget = (e.clientX - r.left) / r.width
+    if (shell.playing) [aim.x, aim.y] = toSource(e.clientX, e.clientY)
+  })
+  canvas.addEventListener('pointerleave', () => (pointerIn = false))
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!shell.playing) return
+    e.preventDefault()
+    ;[aim.x, aim.y] = toSource(e.clientX, e.clientY)
+    fire(aim.x, aim.y)
+  })
+  const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0], ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1] }
   window.addEventListener('keydown', (e) => {
     if (!shell.playing || demo) return
-    const k = keyMap[e.key]
-    if (!k) return
-    e.preventDefault()
-    keys[k] = true
+    const a = arrows[e.key]
+    if (a) {
+      e.preventDefault()
+      if (a[0]) keys.x = a[0]
+      if (a[1]) keys.y = a[1]
+    } else if (e.key === ' ' && !e.repeat && !shell.ended) {
+      e.preventDefault()
+      fire(aim.x, aim.y)
+    }
   })
   window.addEventListener('keyup', (e) => {
-    const k = keyMap[e.key]
-    if (k && !demo) keys[k] = false
+    const a = arrows[e.key]
+    if (!a) return
+    if (a[0]) keys.x = 0
+    if (a[1]) keys.y = 0
   })
-  pad.querySelectorAll<HTMLButtonElement>('[data-k]').forEach((b) => {
-    const k = b.dataset.k as keyof typeof keys
-    const set = (v: boolean) => (e: Event) => {
-      e.preventDefault()
-      if (!demo) keys[k] = v
-    }
-    b.addEventListener('pointerdown', set(true))
-    b.addEventListener('pointerup', set(false))
-    b.addEventListener('pointercancel', set(false))
-    b.addEventListener('pointerleave', set(false))
-  })
-  crtBtn.addEventListener('click', () => {
-    crtOn = !crtOn
-    crtBtn.setAttribute('aria-pressed', String(crtOn))
-    crtBtn.textContent = crtOn ? 'CRT 滤镜 开' : 'CRT 滤镜 关'
-    sound.relay()
-  })
-  const hold = (v: number) => () => {
-    if (shell.playing) return
-    raw = v
-    if (v) sound.relay()
-  }
-  canvas.addEventListener('pointerdown', hold(1))
-  canvas.addEventListener('pointerup', hold(0))
-  canvas.addEventListener('pointerleave', () => (raw = 0))
 
-  const shell = new GameShell(el, 'cart', '卡带', {
+  const shell = new GameShell(el, 'cart-gallery', '光枪靶场', {
     ambience: 'cart',
     base: 'crt',
     start() {
       reset(false)
-      keys.l = keys.r = keys.j = false
+      keys.x = keys.y = 0
+      aim.x = SW / 2
+      aim.y = SH / 2
     },
     stop() {
       reset(true)
@@ -695,6 +736,13 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
       accT -= 1 / 60
     }
     const t = (now - t0) / 1000
+    // the divider follows the pointer; left alone it sweeps by itself so the comparison is always visible
+    if (shell.playing) split = -1
+    else {
+      const want = pointerIn ? splitTarget : 0.5 + 0.3 * Math.sin(t * 0.5)
+      split = split < 0 ? want : split + (want - split) * Math.min(1, dt * 9)
+      splitTag.style.left = `${(split * 100).toFixed(2)}%`
+    }
     draw(t)
     present(t)
     if (active) raf = requestAnimationFrame(loop)

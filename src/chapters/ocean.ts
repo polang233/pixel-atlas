@@ -53,6 +53,10 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
   const zoneDesc = el.querySelector<HTMLElement>('.oc-desc')!
 
   const by = (re: RegExp) => sprites.filter((s) => re.test(s.subject))
+  // Almost every sprite in this strip is drawn facing left; these two face right.
+  const facesRight = new Set<Sprite>([sprites[24], sprites[33]].filter(Boolean))
+  /** mirror the sprite when its drawn facing differs from where it is heading */
+  const mirror = (spr: Sprite, heading: number) => heading > 0 !== facesRight.has(spr)
   const creatures: Creature[] = []
   const add = (list: Sprite[], d0: number, d1: number, o: Partial<Creature> = {}) =>
     list.forEach((spr) =>
@@ -190,7 +194,7 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
       const v = Math.min(sp, dist * 0.12)
       game.x += (dx / dist) * v
       game.y += (dy / dist) * v
-      if (Math.abs(dx) > 2) game.face = Math.sign(dx)
+      if (Math.abs(dx) > Math.max(3, game.size * 0.2)) game.face = Math.sign(dx)
     }
     game.x = Math.max(game.size / 2, Math.min(w - game.size / 2, game.x))
     game.y = Math.max(game.size / 2, Math.min(h - game.size / 2, game.y))
@@ -402,11 +406,11 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
         const size = Math.round(f.size)
         const dl = Math.hypot(f.x - game.x, f.y - game.y)
         const lit = cam > 600 ? Math.max(0, 1 - dl / (40 + game.size)) : 0
-        blit(f.spr, Math.round(f.x - size / 2), Math.round(f.y - size / 2 + Math.sin(t * 2 + f.phase) * 1.5), size, f.vx < 0, rowD(f.y), f.glow, f.phase, Math.max(0, (f.revealUntil - now) / 1400), lit)
+        blit(f.spr, Math.round(f.x - size / 2), Math.round(f.y - size / 2 + Math.sin(t * 2 + f.phase) * 1.5), size, mirror(f.spr, f.vx), rowD(f.y), f.glow, f.phase, Math.max(0, (f.revealUntil - now) / 1400), lit)
       }
       if (game.alive || Math.floor(now / 90) % 2) {
         const size = Math.round(game.size)
-        blit(game.spr, Math.round(game.x - size / 2), Math.round(game.y - size / 2), size, game.face < 0, Math.min(rowD(game.y), 300), cam > 900 ? [255, 214, 120] : null, 0, 0.35 + 0.15 * Math.sin(now / 200), 1)
+        blit(game.spr, Math.round(game.x - size / 2), Math.round(game.y - size / 2), size, mirror(game.spr, game.face), Math.min(rowD(game.y), 300), cam > 900 ? [255, 214, 120] : null, 0, 0.35 + 0.15 * Math.sin(now / 200), 1)
       }
     } else
     for (const c of creatures) {
@@ -418,7 +422,7 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
       const sx = Math.round(c.x * w + (mx - 0.5) * c.layer * -14 - size / 2)
       const sy = Math.round(h / 2 + (c.depth - cam) * ppm + bob + (my - 0.5) * c.layer * -6 - size / 2)
       if (sy > h || sy + size < 0) continue
-      blit(c.spr, sx, sy, size, c.dir < 0, c.depth, c.glow, c.phase, Math.max(0, (c.revealUntil - now) / 1400))
+      blit(c.spr, sx, sy, size, mirror(c.spr, c.dir), c.depth, c.glow, c.phase, Math.max(0, (c.revealUntil - now) / 1400))
     }
     // additive glow halos, quantised into rings
     for (const [cx, cy, col, p] of halos) {

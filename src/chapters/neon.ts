@@ -6,13 +6,13 @@
  */
 import { sound } from '../audio'
 import { GameShell } from '../game'
+import { drawText, textWidth } from '../pixelfont'
 import { rgbToLch } from '../color'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
 
 const PX = 3
-const SCALE = 2
 const NEON: [number, number, number, number][] = [
   // hue, r, g, b
   [0, 255, 59, 92],
@@ -34,6 +34,7 @@ interface Sign {
   off: HTMLCanvasElement
   glow: HTMLCanvasElement
   raw: HTMLCanvasElement
+  rgb: [number, number, number]
   state: 'off' | 'starting' | 'on'
   until: number
   pattern: number[]
@@ -76,7 +77,7 @@ function makeCanvas(w: number, h: number) {
   return c
 }
 
-function buildSign(spr: Sprite) {
+function buildSign(spr: Sprite, SCALE: number) {
   const { mask, rgb } = tube(spr)
   const S = 16 * SCALE
   const M = 10
@@ -140,7 +141,7 @@ function buildSign(spr: Sprite) {
     gd.data[i * 4 + 3] = Math.round(q * 150)
   }
   gc.putImageData(gd, 0, 0)
-  return { on, off, glow, raw }
+  return { on, off, glow, raw, rgb }
 }
 
 export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
@@ -168,6 +169,9 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
   let active = false
   let hoverSign: Sign | null = null
   let acc = 0
+  let signScale = 2
+  let cars: { x: number; y: number; v: number; c: [number, number, number]; len: number }[] = []
+  let sparks: { x: number; y: number; vx: number; vy: number; life: number; c: [number, number, number] }[] = []
 
   function layout() {
     w = Math.ceil(el.clientWidth / PX)
@@ -203,9 +207,11 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     }
     // near buildings with sign slots
     x = -4
+    signScale = w >= 380 ? 3 : 2
+    const S = 16 * signScale
     const slots: [number, number][] = []
     while (x < w) {
-      const bw = 34 + Math.floor(Math.random() * 30)
+      const bw = S + 8 + Math.floor(Math.random() * 26)
       const bh = Math.floor(groundY * (0.42 + Math.random() * 0.4))
       const top = groundY - bh
       c.fillStyle = '#0d0818'
@@ -215,14 +221,13 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       c.fillRect(x + bw - 1, top, 1, bh)
       for (let wy = top + 4; wy < groundY - 6; wy += 6)
         for (let wx = x + 3; wx < x + bw - 4; wx += 5) if (Math.random() < 0.35) windows.push({ x: wx, y: wy, on: Math.random() < 0.5 })
-      if (bw > 38) slots.push([x + Math.floor(bw / 2), top + 8 + Math.floor(Math.random() * Math.max(1, bh * 0.25))])
-      if (bw > 38 && bh > groundY * 0.62) slots.push([x + Math.floor(bw / 2), top + Math.floor(bh * 0.55)])
+      if (bw >= S + 8) slots.push([x + Math.floor(bw / 2), top + 8 + Math.floor(Math.random() * Math.max(1, bh * 0.2))])
+      if (bh > S * 2.6 + 30) slots.push([x + Math.floor(bw / 2), top + 16 + S + Math.floor(Math.random() * 8)])
       x += bw + 2 + Math.floor(Math.random() * 6)
     }
     // street
     c.fillStyle = '#07050d'
     c.fillRect(0, groundY, w, h - groundY)
-    const S = 16 * SCALE
     // keep signs clear of the copy box
     const cr = el.querySelector('.neon-copy')!.getBoundingClientRect()
     const er = el.getBoundingClientRect()
@@ -241,7 +246,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
           x: sx - S / 2,
           y: Math.min(sy, groundY - S - 10),
           size: S,
-          ...buildSign(spr),
+          ...buildSign(spr, signScale),
           state: 'off' as const,
           until: 0,
           pattern: [],
@@ -263,6 +268,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     s.until = now + 650
     // a flicker pattern: on/off toggles in ms
     s.pattern = [0, 60, 110, 190, 260, 300, 420, 470]
+    for (let i = 0; i < 14; i++) sparks.push({ x: s.x + Math.random() * s.size, y: s.y + Math.random() * s.size, vx: (Math.random() - 0.5) * 1.6, vy: -Math.random() * 1.2, life: 0.6 + Math.random() * 0.5, c: s.rgb })
     sound.buzz()
     setTimeout(() => sound.buzz(), 260)
     setTimeout(() => sound.tone(1900, 0.05, { type: 'triangle', vol: 0.02 }), 480)
@@ -333,7 +339,13 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     score: 0,
     hits: [0, 0, 0, 0] as number[], // perfect, great, good, miss
     press: [0, 0, 0, 0],
-    sparks: [] as { x: number; y: number; vx: number; vy: number; life: number; c: [number, number, number] }[],
+    rings: [] as { lane: number; t0: number; q: number }[],
+    bump: 0,
+    jolt: 0,
+    flash: 0,
+    pulse: 0,
+    comboPop: 0,
+    counted: 0,
     bars: 24,
     ended: false,
   }
@@ -374,8 +386,17 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     }
   }
 
-  const laneX = (i: number) => Math.round(w / 2 + (i - 1.5) * 30)
-  const hitY = () => groundY - 6
+  // the track is drawn in perspective: p = 0 at the vanishing point, 1 on the hit line
+  const track = () => {
+    const laneW = Math.max(26, Math.min(58, w * 0.105))
+    const vy = Math.round(h * 0.2)
+    const hy = groundY - 5
+    return { laneW, vy, hy, cx: w / 2 }
+  }
+  const depthScale = (p: number) => 0.14 + 0.86 * p
+  const laneX = (i: number, p = 1) => w / 2 + (i - 1.5) * track().laneW * depthScale(p)
+  const hitY = () => track().hy
+  const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
   function judge(text: string, color: string) {
     judgeEl.textContent = text
@@ -384,6 +405,17 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     judgeEl.classList.remove('pop')
     void judgeEl.offsetWidth
     judgeEl.classList.add('pop')
+  }
+
+  function surge() {
+    const now = performance.now()
+    signs.forEach((sg) => {
+      if (sg.state === 'off') powerOn(sg, now)
+      else sg.glitchUntil = now + 380
+    })
+    rg.flash = 1
+    sound.arp([523, 659, 784, 1047, 1319], 0.045, { wave: sound.pulse(0.25), vol: 0.04, len: 0.14 })
+    judge(`电量过载 ×${rg.combo}`, '#ffffff')
   }
 
   function hitLane(lane: number) {
@@ -403,86 +435,165 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     rg.combo++
     rg.best = Math.max(rg.best, rg.combo)
     rg.score += Math.round([300, 200, 100][q] * (1 + Math.min(rg.combo, 60) / 30))
-    judge(`${['PERFECT', 'GREAT', 'GOOD'][q]}${rg.combo > 3 ? ' ×' + rg.combo : ''}`, `rgb(${LANES[lane].join(',')})`)
+    rg.bump = q === 0 ? 1 : 0.6
+    rg.comboPop = 1
+    rg.rings.push({ lane, t0: performance.now(), q })
     const [root] = CHORDS[Math.floor(best.t / (4 * BEAT)) % 4]
     sound.tone(N(root + [12, 16, 19, 24][lane]), 0.18, { wave: sound.pulse(0.25), vol: 0.045 })
-    // light one more sign in the city
+    if (q === 0) sound.tone(N(root + [12, 16, 19, 24][lane] + 12), 0.1, { type: 'triangle', vol: 0.02, at: 0.03 })
+    // every second hit wires up one more sign
     const off = signs.filter((sg) => sg.state === 'off')
-    if (off.length && rg.combo % 3 === 0) powerOn(off[(Math.random() * off.length) | 0], performance.now())
-    for (let i = 0; i < 10; i++) rg.sparks.push({ x: laneX(lane), y: hitY(), vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2.5, life: 1, c: LANES[lane] })
+    if (off.length && rg.combo % 2 === 0) powerOn(off[(Math.random() * off.length) | 0], performance.now())
+    const n = q === 0 ? 22 : 12
+    for (let i = 0; i < n; i++) sparks.push({ x: laneX(lane) + (Math.random() - 0.5) * 16, y: hitY(), vx: (Math.random() - 0.5) * 4.4, vy: -Math.random() * 3.6 - 0.4, life: 0.7 + Math.random() * 0.5, c: LANES[lane] })
+    if (rg.combo > 0 && rg.combo % 10 === 0) surge()
+    else judge(`${['PERFECT', 'GREAT', 'GOOD'][q]}${rg.combo > 3 ? ' ×' + rg.combo : ''}`, `rgb(${LANES[lane].join(',')})`)
     shell.score(rg.score)
   }
 
   function missNote(n: Note) {
     n.missed = true
     rg.hits[3]++
+    if (rg.combo >= 5) rg.jolt = 1
     rg.combo = 0
     judge('MISS', '#8a7fa8')
     sound.buzz()
     const lit = signs.filter((sg) => sg.state === 'on')
-    if (lit.length) lit[(Math.random() * lit.length) | 0].glitchUntil = performance.now() + 500
+    for (let k = 0; k < 2 && lit.length; k++) lit[(Math.random() * lit.length) | 0].glitchUntil = performance.now() + 600
   }
 
   function drawGame(now: number) {
     const t = songT()
     scheduleMusic()
-    const hy = hitY()
-    // lanes and receptors
-    for (let i = 0; i < 4; i++) {
-      const x = laneX(i)
-      const [r, g, b] = LANES[i]
-      sctx.fillStyle = `rgba(${r},${g},${b},0.08)`
-      sctx.fillRect(x - 12, 0, 24, hy + 4)
-      const lit = now - rg.press[i] < 110
-      sctx.fillStyle = `rgba(${r},${g},${b},${lit ? 1 : 0.55})`
-      sctx.fillRect(x - 12, hy, 24, 1)
-      sctx.fillRect(x - 12, hy + 3, 24, 1)
-      sctx.fillRect(x - 12, hy, 1, 4)
-      sctx.fillRect(x + 11, hy, 1, 4)
-      if (lit) {
-        sctx.globalCompositeOperation = 'lighter'
-        sctx.fillStyle = `rgba(${r},${g},${b},0.25)`
-        sctx.fillRect(x - 14, hy - 3, 28, 10)
-        sctx.globalCompositeOperation = 'source-over'
+    const { laneW, vy, hy, cx } = track()
+    const phase = t > 0 ? (t / BEAT) % 1 : 1
+    const pulse = Math.max(0, 1 - phase * 2.6)
+    rg.pulse = pulse
+    // the road: a dark trapezoid, pressed lanes lit, dividers that breathe with the beat
+    for (let y = vy; y <= hy + 6; y++) {
+      const p = (y - vy) / (hy - vy)
+      const sc = depthScale(p)
+      const half = Math.round(2 * laneW * sc)
+      sctx.fillStyle = `rgba(5,3,12,${0.5 + 0.34 * Math.min(1, p)})`
+      sctx.fillRect(Math.round(cx) - half, y, half * 2, 1)
+      for (let i = 0; i < 4; i++) {
+        const held = now - rg.press[i]
+        if (held > 170) continue
+        sctx.fillStyle = rgba(LANES[i], 0.3 * (1 - held / 170) * (0.3 + 0.7 * p))
+        sctx.fillRect(Math.round(cx + (i - 2) * laneW * sc), y, Math.ceil(laneW * sc), 1)
+      }
+      for (let k = 0; k <= 4; k++) {
+        const edge = k === 0 || k === 4
+        sctx.fillStyle = rgba(edge ? NEON[6].slice(1) as [number, number, number] : [120, 110, 190], (edge ? 0.45 + pulse * 0.5 : 0.16 + pulse * 0.16) * (0.25 + 0.75 * Math.min(1, p)))
+        sctx.fillRect(Math.round(cx + (k - 2) * laneW * sc), y, 1, 1)
       }
     }
-    // notes: neon bars falling to the line
+    // beat lines rushing toward the player
+    for (let b = Math.ceil(t / BEAT); b * BEAT < t + TRAVEL; b++) {
+      const u = 1 - (b * BEAT - t) / TRAVEL
+      if (u < 0) continue
+      const p = u ** 1.8
+      const half = Math.round(2 * laneW * depthScale(p))
+      sctx.fillStyle = `rgba(255,255,255,${(b % 4 === 0 ? 0.26 : 0.1) * p})`
+      sctx.fillRect(Math.round(cx) - half, Math.round(vy + (hy - vy) * p), half * 2, 1)
+    }
+    // receptors
+    for (let i = 0; i < 4; i++) {
+      const x = Math.round(laneX(i))
+      const c = LANES[i]
+      const lit = now - rg.press[i] < 110
+      const rw = Math.round(laneW / 2) - 3
+      sctx.fillStyle = rgba(c, lit ? 1 : 0.6 + pulse * 0.3)
+      sctx.fillRect(x - rw, hy - 2, rw * 2, 1)
+      sctx.fillRect(x - rw, hy + 3, rw * 2, 1)
+      sctx.fillRect(x - rw, hy - 2, 1, 6)
+      sctx.fillRect(x + rw - 1, hy - 2, 1, 6)
+      if (lit) {
+        sctx.globalCompositeOperation = 'lighter'
+        sctx.fillStyle = rgba(c, 0.4)
+        sctx.fillRect(x - rw - 2, hy - 5, rw * 2 + 4, 12)
+        sctx.globalCompositeOperation = 'source-over'
+      }
+      if (w > 300) drawText(sctx, 'DFJK'[i], x - 1, hy + 8, rgba(c, 0.8), true)
+    }
+    // notes: glowing bars that grow as they come closer
     for (const n of rg.notes) {
       if (n.hit) continue
       if (!n.missed && t - n.t > 0.16) missNote(n)
       const u = 1 - (n.t - t) / TRAVEL
-      if (u < 0 || u > 1.15) continue
-      const y = Math.round(u * hy)
-      const x = laneX(n.lane)
-      const [r, g, b] = LANES[n.lane]
-      const a = n.missed ? 0.25 : 1
+      if (u < 0 || u > 1.14) continue
+      const p = u ** 1.8
+      const sc = depthScale(p)
+      const y = Math.round(vy + (hy - vy) * p)
+      const x = laneX(n.lane, p)
+      const c = LANES[n.lane]
+      const a = n.missed ? 0.22 : Math.min(1, 0.35 + p)
+      const nw = Math.max(3, Math.round((laneW - 6) * sc))
+      const nh = Math.max(1, Math.round(5 * sc))
       sctx.globalCompositeOperation = 'lighter'
-      sctx.fillStyle = `rgba(${r},${g},${b},${0.18 * a})`
-      sctx.fillRect(x - 13, y - 3, 26, 8)
+      sctx.fillStyle = rgba(c, 0.22 * a)
+      sctx.fillRect(Math.round(x - nw / 2) - 2, y - nh - 1, nw + 4, nh * 2 + 3)
+      // a short tail behind the bar
+      sctx.fillStyle = rgba(c, 0.1 * a)
+      sctx.fillRect(Math.round(x - nw / 2) + 1, y - nh * 4, nw - 2, nh * 3)
       sctx.globalCompositeOperation = 'source-over'
-      sctx.fillStyle = `rgba(${r},${g},${b},${a})`
-      sctx.fillRect(x - 10, y, 20, 2)
-      sctx.fillStyle = `rgba(255,255,255,${0.8 * a})`
-      sctx.fillRect(x - 9, y, 18, 1)
+      sctx.fillStyle = rgba(c, a)
+      sctx.fillRect(Math.round(x - nw / 2), y - Math.floor(nh / 2), nw, nh)
+      sctx.fillStyle = `rgba(255,255,255,${0.85 * a})`
+      sctx.fillRect(Math.round(x - nw / 2) + 1, y - Math.floor(nh / 2), nw - 2, Math.max(1, Math.floor(nh / 2)))
     }
-    for (const sp of rg.sparks) {
-      sp.x += sp.vx
-      sp.y += sp.vy
-      sp.vy += 0.12
-      sp.life -= 0.04
-      sctx.fillStyle = `rgba(${sp.c.join(',')},${Math.max(0, sp.life)})`
-      sctx.fillRect(Math.round(sp.x), Math.round(sp.y), 1, 1)
+    // hit rings and light beams
+    sctx.globalCompositeOperation = 'lighter'
+    rg.rings = rg.rings.filter((r) => now - r.t0 < 320)
+    for (const r of rg.rings) {
+      const k = (now - r.t0) / 320
+      const c = LANES[r.lane]
+      const x = Math.round(laneX(r.lane))
+      const rw = Math.round(laneW / 2 + k * 14)
+      const rh = Math.round(3 + k * 9)
+      sctx.fillStyle = rgba(c, (1 - k) * 0.9)
+      sctx.fillRect(x - rw, hy - rh, rw * 2, 1)
+      sctx.fillRect(x - rw, hy + rh, rw * 2, 1)
+      sctx.fillRect(x - rw, hy - rh, 1, rh * 2)
+      sctx.fillRect(x + rw, hy - rh, 1, rh * 2)
+      if (r.q === 0) {
+        // a perfect hit throws a beam of light up the lane
+        for (let y = hy; y > vy; y -= 2) {
+          const p = (y - vy) / (hy - vy)
+          sctx.fillStyle = rgba(c, (1 - k) * 0.22 * p)
+          sctx.fillRect(Math.round(cx + (r.lane - 2) * laneW * depthScale(p)), y, Math.ceil(laneW * depthScale(p)), 2)
+        }
+      }
     }
-    rg.sparks = rg.sparks.filter((sp) => sp.life > 0)
+    sctx.globalCompositeOperation = 'source-over'
+    // combo counter above the road
+    rg.comboPop = Math.max(0, rg.comboPop - 0.08)
+    if (rg.combo >= 2) {
+      const sc = (w > 360 ? 3 : 2) + (rg.comboPop > 0.5 ? 1 : 0)
+      const txt = String(rg.combo)
+      const c = LANES[rg.combo % 4]
+      drawText(sctx, txt, Math.round(cx - textWidth(txt, sc) / 2), vy - 6 * sc - 2, rgba(c, 1), true, sc)
+      drawText(sctx, 'COMBO', Math.round(cx - textWidth('COMBO') / 2), vy - 1, 'rgba(255,255,255,0.7)', true)
+    }
+    // song progress
+    const total = rg.bars * 4 * BEAT
+    sctx.fillStyle = 'rgba(255,255,255,0.18)'
+    sctx.fillRect(Math.round(cx - 2 * laneW), hy + 16, Math.round(4 * laneW), 1)
+    sctx.fillStyle = '#22f3ff'
+    sctx.fillRect(Math.round(cx - 2 * laneW), hy + 16, Math.round(4 * laneW * Math.max(0, Math.min(1, t / total))), 1)
     // countdown + end
     if (t < 4 * BEAT * 2 && t > 0) {
       const beat = Math.floor(t / BEAT)
-      if (beat >= 4 && beat < 8) judge(String(8 - beat), '#ffffff')
+      if (beat >= 4 && beat < 8 && beat !== rg.counted) {
+        rg.counted = beat
+        judge(String(8 - beat), '#ffffff')
+        sound.tone(beat === 7 ? 1320 : 880, 0.08, { type: 'square', vol: 0.04 })
+      }
     }
-    if (!rg.ended && t > rg.bars * 4 * BEAT + 0.6) {
+    if (!rg.ended && t > total + 0.6) {
       rg.ended = true
-      const total = rg.notes.length
-      const acc = total ? (rg.hits[0] + rg.hits[1] * 0.7 + rg.hits[2] * 0.4) / total : 0
+      const all = rg.notes.length
+      const acc = all ? (rg.hits[0] + rg.hits[1] * 0.7 + rg.hits[2] * 0.4) / all : 0
       const grade = acc > 0.92 ? 'S' : acc > 0.8 ? 'A' : acc > 0.65 ? 'B' : acc > 0.45 ? 'C' : 'D'
       shell.end(rg.score, `评级 ${grade} · 准确率 ${Math.round(acc * 100)}%`, `完美 ${rg.hits[0]} · 很好 ${rg.hits[1]} · 还行 ${rg.hits[2]} · 漏掉 ${rg.hits[3]} · 最大连击 ${rg.best}`, acc > 0.65)
     }
@@ -495,7 +606,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       updateCount()
       rg.music = sound.ready
       rg.clock = rg.music ? () => sound.time : () => performance.now() / 1000
-      Object.assign(rg, { on: true, notes: chart(rg.bars), start: rg.clock() + 0.4, scheduled: 0, combo: 0, best: 0, score: 0, hits: [0, 0, 0, 0], sparks: [], ended: false })
+      Object.assign(rg, { on: true, notes: chart(rg.bars), start: rg.clock() + 0.4, scheduled: 0, combo: 0, best: 0, score: 0, hits: [0, 0, 0, 0], rings: [], bump: 0, jolt: 0, flash: 0, comboPop: 0, counted: 0, ended: false })
     },
     stop() {
       rg.on = false
@@ -515,7 +626,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     const x = (e.clientX - r.left) / PX
     let lane = 0
     for (let i = 1; i < 4; i++) if (Math.abs(x - laneX(i)) < Math.abs(x - laneX(lane))) lane = i
-    if (Math.abs(x - laneX(lane)) < 40) hitLane(lane)
+    if (Math.abs(x - laneX(lane)) < track().laneW) hitLane(lane)
   })
 
   function frame(now: number) {
@@ -527,7 +638,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       if (!reducedMotion && Math.random() < 0.0015) win.on = !win.on
       if (!win.on) continue
       sctx.fillStyle = (win.x + win.y) % 3 ? '#e8b86a' : '#8ad7ff'
-      sctx.globalAlpha = 0.55
+      sctx.globalAlpha = rg.on ? 0.4 + rg.pulse * 0.6 : 0.55
       sctx.fillRect(win.x, win.y, 2, 2)
     }
     sctx.globalAlpha = 1
@@ -560,13 +671,50 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
         sctx.globalCompositeOperation = 'source-over'
       }
     }
-    if (rg.on) drawGame(now)
+    // traffic: streaks of light along the wet street
+    if (!reducedMotion && Math.random() < (rg.on ? 0.05 : 0.014)) {
+      const left = Math.random() < 0.5
+      const n = NEON[(Math.random() * NEON.length) | 0]
+      cars.push({ x: left ? -30 : w + 30, y: groundY - 2 - ((Math.random() * 2) | 0), v: (left ? 1 : -1) * (3 + Math.random() * 4), c: [n[1], n[2], n[3]], len: 10 + Math.random() * 16 })
+    }
+    cars = cars.filter((c) => c.x > -60 && c.x < w + 60)
+    for (const c of cars) {
+      c.x += c.v
+      sctx.fillStyle = `rgba(${c.c.join(',')},0.9)`
+      sctx.fillRect(Math.round(c.x), c.y, Math.round(c.len), 1)
+      sctx.fillStyle = 'rgba(255,255,255,0.9)'
+      sctx.fillRect(Math.round(c.v > 0 ? c.x + c.len - 2 : c.x), c.y, 2, 1)
+    }
+    if (rg.on) {
+      // the horizon breathes with the kick drum
+      sctx.globalCompositeOperation = 'lighter'
+      sctx.fillStyle = `rgba(255,43,214,${0.05 + rg.pulse * 0.1 + Math.min(0.12, rg.combo / 300)})`
+      sctx.fillRect(0, groundY - 46, w, 46)
+      sctx.globalCompositeOperation = 'source-over'
+      drawGame(now)
+    }
+    for (const sp of sparks) {
+      sp.x += sp.vx
+      sp.y += sp.vy
+      sp.vy += 0.13
+      sp.life -= 0.035
+      sctx.fillStyle = `rgba(${sp.c.join(',')},${Math.max(0, Math.min(1, sp.life))})`
+      const z = sp.life > 0.6 ? 2 : 1
+      sctx.fillRect(Math.round(sp.x), Math.round(sp.y), z, z)
+    }
+    sparks = sparks.filter((sp) => sp.life > 0)
+    if (rg.flash > 0) {
+      sctx.fillStyle = `rgba(255,255,255,${rg.flash * 0.35})`
+      sctx.fillRect(0, 0, w, h)
+      rg.flash = Math.max(0, rg.flash - 0.08)
+    }
     // rain
     sctx.fillStyle = 'rgba(170, 185, 255, 0.35)'
     for (const d of drops) {
       if (!reducedMotion) {
-        d.y += d.v
-        d.x -= d.v * 0.25
+        const k = rg.on ? 1 + Math.min(1.2, rg.combo / 30) : 1
+        d.y += d.v * k
+        d.x -= d.v * 0.25 * k
       }
       if (d.y > groundY + Math.random() * (h - groundY)) {
         if (Math.random() < 0.3) splashes.push({ x: d.x, y: d.y, t: now })
@@ -575,6 +723,13 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       }
       for (let k = 0; k < d.l; k++) sctx.fillRect(Math.round(d.x + k * 0.25), Math.round(d.y - k), 1, 1)
     }
+    // a hit punches the camera in a little; a dropped combo jolts it sideways
+    rg.bump = Math.max(0, rg.bump - 0.12)
+    rg.jolt = Math.max(0, rg.jolt - 0.1)
+    const zoom = rg.on && !reducedMotion ? 1 + rg.bump * 0.018 + rg.pulse * 0.004 : 1
+    const jx = rg.on && rg.jolt > 0 ? Math.round(Math.sin(now / 18) * rg.jolt * 4) : 0
+    ctx.setTransform(zoom, 0, 0, zoom, (-w * (zoom - 1)) / 2 + jx, (-h * (zoom - 1)) * 0.7)
+    ctx.imageSmoothingEnabled = false
     ctx.drawImage(scene, 0, 0)
     // reflection: mirrored rows with a ripple, darkened
     ctx.globalAlpha = 0.5
@@ -594,6 +749,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       ctx.fillRect(Math.round(s.x) - 1, Math.round(s.y) - 1, 1, 1)
       ctx.fillRect(Math.round(s.x) + 1, Math.round(s.y) - 1, 1, 1)
     }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
     if (active) raf = requestAnimationFrame(frame)
   }
 

@@ -260,23 +260,42 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 
 /* ===== WORLD 01 CART ===== */
 .ch-cart { background: #050407; }
-.cart-gl { position: absolute; inset: 56px 0 0 36%; width: 64%; height: calc(100% - 56px); cursor: pointer; }
+.cart-screen { position: absolute; inset: 56px 0 0 36%; }
+.cart-gl { width: 100%; height: 100%; cursor: ew-resize; }
+.cart-split {
+  position: absolute; top: 14px; left: 50%; width: 0; display: flex; justify-content: center; gap: 14px;
+  font-size: 12px; white-space: nowrap; pointer-events: none; color: var(--gold);
+}
+.cart-split span { background: rgb(5 4 7 / 0.78); padding: 4px 8px; border: 2px solid currentColor; }
+.cart-split span:first-child { color: var(--paper); }
+.cart-split span:first-child::before { content: '◀ '; }
+.cart-split span:last-child::after { content: ' ▶'; }
 .cart-copy { position: absolute; left: 5vw; top: 50%; translate: 0 -50%; width: min(31vw - 24px, 420px); }
 .cart-copy h2 { color: #9ad1ff; text-shadow: 0 0 18px rgb(120 180 255 / 0.5), 4px 4px 0 #000; }
-.ch-cart.is-playing .cart-gl { inset: 56px 0 0 0; width: 100%; cursor: default; }
-.cart-pad { display: none; }
-@media (pointer: coarse) {
-  .ch-cart.is-playing .cart-pad { display: flex; position: absolute; left: 16px; right: 16px; bottom: 24px; z-index: 6; gap: 10px; }
-  .cart-pad button { width: 72px; height: 72px; font-size: 22px; background: rgb(255 255 255 / 0.08); border: 3px solid var(--paper); color: var(--paper); touch-action: none; user-select: none; }
-  .cart-pad .j { margin-left: auto; border-radius: 50%; background: rgb(255 204 77 / 0.25); border-color: var(--gold); }
-}
+.fx-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.fx-row .chip { color: #9ad1ff; }
+.fx-row .chip[aria-pressed='true'] { background: #9ad1ff; border-color: #9ad1ff; color: #050407; }
+.fx-row .chip[aria-pressed='false'] { opacity: 0.6; text-decoration: line-through; }
+.ch-cart.is-playing .cart-screen { inset: 56px 0 0 0; }
+.ch-cart.is-playing .cart-gl { cursor: none; }
+.ch-cart.is-playing .cart-split { display: none; }
 
 /* ---------- world copy + mini-game chrome ---------- */
+.world-copy > p:not([class]) { text-wrap: pretty; }
+.world-hint { font-size: 12px !important; line-height: 1.7 !important; color: var(--dim); margin-top: 12px; display: flex; flex-wrap: wrap; gap: 0 6px; }
+.world-hint::before { content: '▸'; color: var(--gold); }
 .world-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; pointer-events: auto; }
+.game-start { animation: start-nudge 2.4s steps(1) infinite; }
+.game-start:hover { animation: none; }
+@keyframes start-nudge { 0%, 88%, 100% { box-shadow: none; } 90%, 96% { box-shadow: 0 0 0 3px rgb(255 204 77 / 0.35); } }
+.fuel { display: inline-block; width: 86px; height: 10px; border: 2px solid #ffb347; padding: 1px; vertical-align: -1px; margin-right: 8px; }
+.fuel i { display: block; height: 100%; background: #ffb347; }
+.fuel.low { border-color: var(--hot); animation: blink 0.5s steps(1) infinite; }
+.fuel.low i { background: var(--hot); }
 .game-start { font-size: 14px; padding: 9px 14px; }
 .game-howto { font-size: 12px !important; margin-top: 10px; line-height: 1.9 !important; }
 .game-howto kbd { font-size: 12px; padding: 0 4px; margin-right: 2px; }
-.is-playing .world-copy, .is-playing .oc-copy, .is-playing .neon-copy, .is-playing .cth-copy, .is-playing .oc-meter { display: none; }
+.is-playing .world-copy, .is-playing .oc-meter { display: none; }
 .game-hud {
   position: absolute; left: 50%; translate: -50% 0; bottom: 18px; z-index: 8;
   display: flex; gap: 18px; align-items: center; font-size: 14px;
@@ -300,6 +319,28 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 .g-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .g-btns kbd { font-size: 12px; padding: 0 4px; box-shadow: none; border-width: 1px; margin: 0; }
 @keyframes pop-in { from { transform: scale(0.85); opacity: 0; } }
+.game-hud { animation: hud-in 0.25s steps(4); }
+@keyframes hud-in { from { translate: -50% 16px; opacity: 0; } }
+
+/* ---------- onward: the hand-off between sections ---------- */
+.nextbar {
+  position: absolute; left: 50%; translate: -50% 0; bottom: 20px; z-index: 31; cursor: pointer; overflow: hidden;
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; color: var(--paper);
+  background: rgb(7 6 12 / 0.86); border: 2px solid rgb(255 255 255 / 0.28); padding: 8px 12px;
+  animation: nb-in 0.3s steps(4);
+}
+.nextbar[hidden] { display: none; }
+body[data-area='worlds'] .nextbar { bottom: 66px; }
+body.is-playing-game .nextbar { display: none; }
+.nextbar b { font-weight: 400; font-size: 14px; color: var(--gold); position: relative; z-index: 1; }
+.nb-label { color: #cfc8db; position: relative; z-index: 1; }
+.nb-arrow { width: 10px; height: 10px; position: relative; z-index: 1; animation: nb-bob 0.9s steps(2) infinite; background: var(--gold); clip-path: polygon(0 20%, 100% 20%, 50% 90%); }
+.nextbar[data-dir='-1'] .nb-arrow { rotate: 180deg; }
+.nb-fill { position: absolute; inset: 0; background: rgb(255 204 77 / 0.26); transform: scaleX(0); transform-origin: left; transition: transform 0.12s steps(3); }
+.nextbar.is-charging { border-color: var(--gold); }
+.nextbar:hover { border-color: var(--gold); background: #1b1626; }
+@keyframes nb-in { from { translate: -50% 14px; opacity: 0; } }
+@keyframes nb-bob { 50% { translate: 0 3px; } }
 
 /* ===== 03 WORKSHOP ===== */
 .ch-workshop {
@@ -377,12 +418,21 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 @keyframes plant { from { translate: 0 -16px; opacity: 0; } }
 .dungeon-dark { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: auto; }
 .dungeon-copy {
-  position: absolute; left: 6vw; bottom: 10vh; max-width: 30em; pointer-events: none;
+  position: absolute; left: 6vw; bottom: 11vh; max-width: 30em; pointer-events: none;
   text-shadow: 0 2px 0 #000;
 }
+.dungeon-game { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; cursor: crosshair; touch-action: none; }
+.dungeon-game[hidden] { display: none; }
+.dungeon-say {
+  position: absolute; left: 50%; top: 76px; translate: -50% 0; z-index: 5; font-size: 14px !important; white-space: nowrap; max-width: none !important;
+  background: #1b1410; color: #ffd9a0; border: 2px solid #ffb347; padding: 6px 12px; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s steps(3);
+}
+.ch-dungeon.is-playing .dungeon-say.on { opacity: 1; }
+.ch-dungeon.is-playing .dungeon-floor, .ch-dungeon.is-playing .dungeon-planted, .ch-dungeon.is-playing .dungeon-dark { visibility: hidden; }
 .dungeon-copy h2 { color: #ffb347; text-shadow: 0 0 24px rgb(255 140 40 / 0.5), 5px 5px 0 #000; }
 .dungeon-copy b { color: #ffb347; font-weight: 600; }
-.dungeon-copy .dim { font-size: 12px; }
+.dungeon-copy .world-hint { color: #c9a57a; }
 .dungeon-tip {
   position: absolute; z-index: 5; font-size: 12px; padding: 6px 10px; background: #1b1410; color: #ffd9a0;
   border: 2px solid #ffb347; pointer-events: none; opacity: 0; max-width: 260px;
@@ -398,7 +448,7 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 .oc-copy h2 { color: #c8f4ff; text-shadow: 4px 4px 0 rgb(0 20 40 / 0.6); margin-top: 8px; }
 .oc-zone { font-size: 20px; color: #9ff0ff; }
 .oc-desc { min-height: 5.4em; margin-top: 6px; }
-.oc-copy .dim { font-size: 12px; color: #9fc3d6; }
+.oc-copy .world-hint, .oc-copy .dim { color: #9fc3d6; }
 .ch-ocean[data-zone='2'] .oc-copy h2, .ch-ocean[data-zone='3'] .oc-copy h2 { color: #6fe3ff; text-shadow: 0 0 20px rgb(80 220 255 / 0.6); }
 .oc-meter {
   position: absolute; right: 70px; top: 14vh; bottom: 14vh; width: 90px;
@@ -412,7 +462,7 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 
 /* ===== 06 NEON ===== */
 .neon-judge {
-  position: absolute; left: 50%; top: 34%; translate: -50% 0; z-index: 5; font-size: 22px; pointer-events: none;
+  position: absolute; left: 50%; top: 22%; translate: -50% 0; z-index: 5; font-size: clamp(22px, 3vw, 40px); pointer-events: none;
   text-shadow: 0 0 12px currentColor, 3px 3px 0 #000; white-space: nowrap;
 }
 .neon-judge[hidden] { display: none; }
@@ -430,8 +480,9 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
   animation: neon-flick 6s steps(1) infinite;
 }
 @keyframes neon-flick { 0%, 100% { opacity: 1; } 41% { opacity: 0.4; } 42% { opacity: 1; } 43% { opacity: 0.5; } 44% { opacity: 1; } }
-.neon-copy .dim { font-size: 12px; color: #a99bc4; }
-.neon-copy .chip { color: #22f3ff; margin-top: 4px; }
+.neon-copy .world-hint, .neon-copy .dim { color: #a99bc4; }
+.neon-copy .world-hint::before { color: #22f3ff; }
+.neon-copy .chip:not(.hot) { color: #22f3ff; }
 .neon-tip {
   position: absolute; left: 0; top: 0; z-index: 6; width: 260px; pointer-events: none;
   background: #0b0716; border: 2px solid #22f3ff; padding: 10px; display: grid; grid-template-columns: 48px 1fr; gap: 4px 10px;
@@ -444,8 +495,58 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 /* ===== 07 CTHULHU ===== */
 .ch-cthulhu { background: radial-gradient(ellipse at 70% 50%, #1d2a22 0%, #0b0f0d 55%, #050607 100%); color: #cfe0c8; }
 .defs { position: absolute; }
-.cth-game { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; cursor: none; touch-action: none; }
-.cth-game[hidden] { display: none; }
+.cth-play {
+  position: absolute; inset: 64px 0 64px; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+}
+.cth-play[hidden] { display: none; }
+.cth-board {
+  --cols: 6; --mad: 0; --card: min(104px, calc((100vw - 48px) / var(--cols) - 10px), calc((100vh - 250px) / 4 - 10px));
+  display: grid; grid-template-columns: repeat(var(--cols), var(--card)); gap: 10px; perspective: 900px;
+}
+.cth-board.is-wrong { animation: wrong 0.3s steps(6); }
+@keyframes wrong { 20% { translate: -6px 0; } 40% { translate: 6px 0; } 60% { translate: -4px 0; } 80% { translate: 3px 0; } }
+.cth-card {
+  position: relative; aspect-ratio: 1; padding: 0; border: 0; background: none; cursor: pointer;
+  transform-style: preserve-3d; transition: transform 0.28s steps(6);
+}
+.cth-card.is-up { transform: rotateY(180deg); }
+.cth-card.is-moving { z-index: 3; filter: drop-shadow(0 0 10px #9fd18b); }
+.cth-card.is-done { cursor: default; animation: sealed 0.5s steps(5) forwards; }
+@keyframes sealed { 30% { scale: 1.12; } 100% { scale: 0.94; } }
+.cth-card.is-done .face { opacity: 0.45; transition: opacity 0.5s steps(4) 0.2s; }
+.cth-card .face {
+  position: absolute; inset: 0; backface-visibility: hidden; display: grid; place-items: center;
+  border: 3px solid #5d7a55; box-shadow: 4px 4px 0 #000;
+}
+.cth-card .back {
+  background: repeating-conic-gradient(#16211a 0 25%, #101813 0 50%) 0 0 / 16px 16px;
+}
+/* each back has one eye; it opens wider the less sanity is left */
+.cth-card .back i {
+  width: 42%; height: calc(6% + var(--mad) * 30%); background: #d8f0c8; border-radius: 50%; position: relative;
+  box-shadow: 0 0 0 3px #0b0f0d, 0 0 14px rgb(159 209 139 / calc(0.2 + var(--mad) * 0.6));
+  transition: height 0.4s steps(4);
+}
+.cth-card .back i::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 32%; height: 100%; translate: -50% -50%;
+  background: #1d0a0a; opacity: calc(var(--mad) * 1.6);
+}
+.cth-card:hover .back { border-color: #cfe0c8; }
+.cth-card .front { transform: rotateY(180deg); background: #1a231d; border-color: #9fd18b; }
+.cth-card .front img {
+  width: 76%; height: 76%; image-rendering: pixelated;
+  filter: saturate(calc(1 - var(--mad) * 0.9)) brightness(calc(1 - var(--mad) * 0.45)) contrast(calc(1 + var(--mad) * 0.5));
+}
+.cth-card.is-lie .front { border-color: #ff3df0; }
+.cth-card.is-done .front { border-color: var(--gold); }
+.cth-play[data-stage='2'] .cth-card:nth-child(3n), .cth-play[data-stage='3'] .cth-card { animation: twitch 2.6s steps(1) infinite; animation-delay: calc(var(--i) * -0.37s); }
+.cth-play[data-stage='3'] .cth-card.is-done, .cth-play[data-stage='2'] .cth-card.is-done { animation: sealed 0.5s steps(5) forwards; }
+@keyframes twitch { 0%, 91%, 100% { rotate: 0deg; } 92% { rotate: -4deg; } 95% { rotate: 3deg; } }
+.cth-peek { color: #9fd18b; background: rgb(5 6 7 / 0.8); }
+.cth-peek:disabled { opacity: 0.35; cursor: not-allowed; }
+.cth-peek kbd { font-size: 12px; padding: 0 4px; box-shadow: none; border-width: 1px; margin: 0 0 0 4px; }
+.ch-cthulhu.is-playing .cth-field { opacity: 0.18; }
+.cth-field { transition: opacity 0.4s steps(4); }
 .cth-field {
   position: absolute; right: -4vw; top: 50%; translate: 0 -50%;
   display: grid; grid-template-columns: repeat(9, clamp(36px, 5vw, 72px)); gap: clamp(4px, 0.7vw, 10px); transform: rotate(-6deg);
@@ -461,6 +562,8 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 .glitch::before { color: #ff3df0; translate: calc(var(--glitch, 0) * -6px) 0; clip-path: inset(10% 0 55% 0); }
 .glitch::after { color: #3dfff0; translate: calc(var(--glitch, 0) * 6px) 0; clip-path: inset(60% 0 5% 0); }
 .cth-text { background: rgb(5 6 7 / 0.7); padding: 10px 14px; font-family: var(--pixel); }
+.cth-copy .world-hint { color: #8fa888; }
+.cth-copy .world-hint::before { color: #9fd18b; }
 .san { display: flex; align-items: center; gap: 12px; margin: 26px 0 12px; font-size: 12px; }
 .san-bar { width: 220px; height: 14px; border: 2px solid #9fd18b; padding: 2px; }
 .san-bar i { display: block; height: 100%; width: 100%; background: #9fd18b; transform-origin: left; }
@@ -503,7 +606,8 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
   .ch-workshop { grid-template-columns: auto 1fr; padding: 72px 4vw 60px; overflow-y: auto; pointer-events: none; }
   .ch-workshop.is-active { pointer-events: auto; }
   .ws-side { grid-column: 1 / -1; }
-  .cart-gl { inset: 56px 0 auto 0; width: 100%; height: 52%; }
+  .cart-screen { inset: 56px 0 auto 0; height: 52%; }
+  .ch-cart.is-playing .cart-screen { inset: 56px 0 0 0; height: auto; }
   .cart-copy { top: auto; bottom: 70px; translate: none; width: auto; right: 5vw; }
 }
 @media (max-width: 820px) {
@@ -555,14 +659,20 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
   .ws-panel canvas { width: 96px; height: 96px; }
 
   .dungeon-copy, .cth-copy, .oc-copy { left: 16px; right: 16px; }
-  .cth-copy { top: auto; bottom: 8vh; translate: none; }
+  .cth-copy { top: auto; bottom: 112px; translate: none; }
   .cth-field { right: -40vw; top: 30%; }
   .oc-copy { top: auto; bottom: 56px; translate: none; }
   .oc-desc { min-height: 0; }
   .oc-meter { right: 16px; width: 64px; top: 70px; bottom: 45vh; }
   .neon-copy { left: 12px; right: 12px; bottom: 52px; padding: 12px 14px; }
   .neon-copy p:first-of-type { display: none; }
-  .cart-copy p:not(.eyebrow):not(.game-howto) { display: none; }
+  .cart-copy p:not(.eyebrow):not(.game-howto):not(.world-hint) { display: none; }
+  .cart-copy { bottom: 110px; }
+  .dungeon-copy p:not(.eyebrow):not(.world-hint) { display: none; }
+  .cth-play { inset: 96px 0 20px; }
+  .nextbar { bottom: 12px; max-width: calc(100% - 16px); }
+  body[data-area='worlds'] .nextbar { bottom: 52px; }
+  .nb-label { overflow: hidden; text-overflow: ellipsis; }
   .ch-cart .world-copy h2 { font-size: 32px; }
   .outro-cards { grid-template-columns: 1fr; }
   .outro-card:nth-child(n + 3) { display: none; }
@@ -570,7 +680,8 @@ body.is-playing-game .worldbar, body.is-playing-game .hud-bottom { display: none
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .snd-btn.is-locked, .hero-reticle, .neon-copy h2 { animation: none; }
+  .snd-btn.is-locked, .hero-reticle, .neon-copy h2, .game-start, .nb-arrow, .cth-card { animation: none; }
+  .cth-card { transition: none; }
 }
 @keyframes blink { 50% { opacity: 0.35; } }
 

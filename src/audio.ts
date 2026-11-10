@@ -336,6 +336,23 @@ class Sound {
     this.tone(988, 0.06, { wave: this.pulse(0.5), vol: 0.04 })
     this.tone(1319, 0.22, { wave: this.pulse(0.5), vol: 0.04, at: 0.06 })
   }
+  shot() {
+    this.noise(0.09, { f0: 5200, f1: 700, q: 0.7, vol: 0.11 })
+    this.tone(210, 0.09, { type: 'square', vol: 0.06, slide: 55 })
+  }
+  step() {
+    this.noise(0.03, { f0: 420 + Math.random() * 160, q: 1.2, vol: 0.03, brown: true })
+  }
+  door() {
+    this.tone(98, 0.5, { type: 'sawtooth', vol: 0.05, slide: 62, attack: 0.05 })
+    this.noise(0.4, { f0: 300, f1: 120, q: 2, vol: 0.06, brown: true })
+  }
+  flip() {
+    this.noise(0.035, { f0: 2600, f1: 900, q: 1.4, vol: 0.05 })
+  }
+  whisper() {
+    this.noise(0.7, { f0: 900 + Math.random() * 900, f1: 2400, q: 7, vol: 0.035, attack: 0.3 })
+  }
   stomp() {
     this.tone(500, 0.1, { type: 'square', vol: 0.06, slide: 120 })
     this.noise(0.05, { f0: 900, q: 0.8, vol: 0.06 })
