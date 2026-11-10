@@ -20,6 +20,8 @@ interface Stage {
   key: string
   era: string
   bits: number
+  /** what the era's jingle is played on */
+  voice: string
   name: string
   desc: string
   palette: RGB[] | null
@@ -33,6 +35,7 @@ const STAGES: Stage[] = [
     key: '现代',
     era: '今天',
     bits: 16,
+    voice: '软件合成 · 和弦铺底 + 长回声',
     name: '现代像素 · 不限色',
     desc: '这批素材平均每张 21 色，带渐变、高光和描边。今天的独立游戏大多是这种“高色深像素”：格子还是格子，颜色几乎不设限。',
     palette: null,
@@ -42,6 +45,7 @@ const STAGES: Stage[] = [
     key: '32 色',
     era: '16 位时代的电脑',
     bits: 5,
+    voice: '8 位采样 · 带回声的弦乐',
     name: '32 色 · 统一调色板',
     desc: '所有素材共用同一套 32 色。单张图会损失一点细节，但整个画面立刻像出自同一个游戏——这是像素美术里最便宜也最有效的“统一画风”手段。',
     palette: DB32,
@@ -51,6 +55,7 @@ const STAGES: Stage[] = [
     key: '16 色',
     era: '8 位主机 / 幻想主机',
     bits: 4,
+    voice: '两条脉冲波 + 一条三角波',
     name: '16 色 · 幻想主机',
     desc: '高饱和的 16 色。没有中间调可用，阴影只能靠换一种颜色来画——限制反而逼出了鲜明的风格。',
     palette: PICO,
@@ -60,6 +65,7 @@ const STAGES: Stage[] = [
     key: '4 色',
     era: '1989 · 掌机',
     bits: 2,
+    voice: '12.5% 窄脉冲 · 一只小喇叭',
     name: '4 色 · 掌机绿',
     desc: '四阶绿色，物体只能靠明暗而不是色相来区分。设计时要先看灰度：灰度里分不清的东西，上了色也分不清。',
     palette: GB,
@@ -70,6 +76,7 @@ const STAGES: Stage[] = [
     key: '1 位',
     era: '1984 · 早期个人电脑',
     bits: 1,
+    voice: '1 位蜂鸣器 · 用快速琶音假装和弦',
     name: '1 位 · 只有黑白',
     desc: '只剩亮与暗，轮廓成了唯一的语言。打开“有序抖动”，用棋盘格的疏密假装出灰色——这是早期电脑最古老的魔法。',
     palette: BW,
@@ -159,6 +166,7 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
     b.type = 'button'
     b.textContent = s.key
     b.addEventListener('click', () => setStage(i))
+    b.addEventListener('pointerenter', () => sound.tick(1500 + i * 140, 0.012))
     li.append(b)
     steps.append(li)
   })
@@ -198,7 +206,7 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
     el.style.setProperty('--depth-accent', ac)
     document.documentElement.style.setProperty('--chapter-fg', fg)
     nameEl.textContent = `${stage + 1}/${STAGES.length} · ${st.name}`
-    eraEl.textContent = `${st.era} · 提示音 ${st.bits >= 16 ? '16' : st.bits} 位`
+    eraEl.textContent = `${st.era} · 音色：${st.voice}`
     descEl.textContent = st.desc
     steps.querySelectorAll('button').forEach((b, k) => b.setAttribute('aria-pressed', String(k === stage)))
     palEl.replaceChildren(
@@ -210,9 +218,18 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
     )
     if (!st.palette) palEl.title = `这 48 张素材共用了 ${origColors.total} 种颜色`
     render(animate)
-    if (animate) sound.depthChime(st.bits)
+    if (animate) sound.eraJingle(stage)
   }
 
+  // replay the era's jingle by clicking the board
+  canvas.addEventListener('click', () => sound.eraJingle(stage))
+  window.addEventListener('keydown', (e) => {
+    if (!el.classList.contains('is-active') || e.target instanceof HTMLInputElement) return
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') setStage(stage + 1)
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') setStage(stage - 1)
+    else return
+    e.preventDefault()
+  })
   ditherBox.addEventListener('change', () => {
     sound.click()
     render(true)
@@ -221,15 +238,15 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
 
   return {
     id: 'depth',
-    num: '01',
+    num: '色深',
     title: '色深',
     color: '#14121c',
     transition: 'dither',
     el,
     consume(delta) {
       const now = performance.now()
-      if (delta > 0 && stage >= STAGES.length - 1) return false
-      if (delta < 0 && stage <= 0) return false
+      if (delta > 0 && stage >= STAGES.length - 1) return true
+      if (delta < 0 && stage <= 0) return true
       if (now < lockUntil) return true
       acc += delta
       if (Math.abs(acc) > 160) {
@@ -239,8 +256,8 @@ export function createDepth(el: HTMLElement, sprites: Sprite[]): Chapter {
       }
       return true
     },
-    enter(dir) {
-      setStage(dir === 1 ? 0 : STAGES.length - 1, false)
+    enter() {
+      setStage(stage, false)
       acc = 0
       lockUntil = performance.now() + 400
     },

@@ -155,7 +155,7 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[]): Chapter {
   updateCount()
   return {
     id: 'dungeon',
-    num: '04',
+    num: '02',
     title: '地牢',
     color: '#0b0a10',
     transition: 'slash',

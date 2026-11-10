@@ -5,6 +5,7 @@
  * when you get near them; the wet street reflects everything.
  */
 import { sound } from '../audio'
+import { GameShell } from '../game'
 import { rgbToLch } from '../color'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
@@ -283,6 +284,10 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     const r = canvas.getBoundingClientRect()
     mx = (e.clientX - r.left) / PX
     my = (e.clientY - r.top) / PX
+    if (rg.on) {
+      tip.hidden = true
+      return
+    }
     const hit = signs.find((s) => mx > s.x - 6 && mx < s.x + s.size + 6 && my > s.y - 6 && my < s.y + s.size + 6) ?? null
     if (hit !== hoverSign) {
       hoverSign = hit
@@ -298,12 +303,219 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     tip.hidden = true
     hoverSign = null
   })
-  canvas.addEventListener('click', () => hoverSign && powerOn(hoverSign, performance.now()))
+  canvas.addEventListener('click', () => !rg.on && hoverSign && powerOn(hoverSign, performance.now()))
   rawBtn.addEventListener('click', () => {
     showRaw = !showRaw
     rawBtn.setAttribute('aria-pressed', String(showRaw))
     rawBtn.textContent = showRaw ? '看霓虹' : '看原图'
     sound.click()
+  })
+
+  // ---- mini game: power the city to the beat ------------------------------------------------
+  const BPM = 120
+  const BEAT = 60 / BPM
+  const TRAVEL = 1.45
+  const LANES = [NEON[6], NEON[4], NEON[2], NEON[3]].map((n) => [n[1], n[2], n[3]] as [number, number, number])
+  const KEYS: Record<string, number> = { d: 0, D: 0, f: 1, F: 1, j: 2, J: 2, k: 3, K: 3, ArrowLeft: 0, ArrowDown: 1, ArrowUp: 2, ArrowRight: 3, '1': 0, '2': 1, '3': 2, '4': 3 }
+  const N = (m: number) => 440 * 2 ** ((m - 69) / 12)
+  const CHORDS = [[57, 45], [53, 41], [48, 48], [55, 43]] // Am F C G: [root note, bass]
+  interface Note { t: number; lane: number; hit: boolean; missed: boolean }
+  const judgeEl = el.querySelector<HTMLElement>('.neon-judge')!
+  const rg = {
+    on: false,
+    notes: [] as Note[],
+    start: 0,
+    clock: () => performance.now() / 1000,
+    music: false,
+    scheduled: 0,
+    combo: 0,
+    best: 0,
+    score: 0,
+    hits: [0, 0, 0, 0] as number[], // perfect, great, good, miss
+    press: [0, 0, 0, 0],
+    sparks: [] as { x: number; y: number; vx: number; vy: number; life: number; c: [number, number, number] }[],
+    bars: 24,
+    ended: false,
+  }
+  const songT = () => rg.clock() - rg.start
+
+  function chart(bars: number) {
+    const notes: Note[] = []
+    let lane = 1
+    const step = BEAT / 2
+    for (let bar = 2; bar < bars; bar++) {
+      const dense = bar < 6 ? 0.3 : bar < 12 ? 0.5 : bar < 18 ? 0.62 : 0.72
+      for (let k = 0; k < 8; k++) {
+        const onBeat = k % 2 === 0
+        if (!(onBeat ? Math.random() < dense + 0.25 : Math.random() < dense - 0.2)) continue
+        lane = Math.random() < 0.6 ? (lane + (Math.random() < 0.5 ? 1 : 3)) % 4 : (Math.random() * 4) | 0
+        const t = bar * 4 * BEAT + k * step
+        notes.push({ t, lane, hit: false, missed: false })
+        if (bar >= 12 && onBeat && k % 4 === 0 && Math.random() < 0.25) notes.push({ t, lane: (lane + 2) % 4, hit: false, missed: false })
+      }
+    }
+    return notes
+  }
+
+  function scheduleMusic() {
+    if (!rg.music) return
+    const horizon = songT() + 0.25
+    const step = BEAT / 2
+    while (rg.scheduled * step < horizon && rg.scheduled < rg.bars * 8) {
+      const k = rg.scheduled
+      const at = rg.start + k * step
+      const bar = Math.floor(k / 8)
+      const [, bass] = CHORDS[bar % 4]
+      if (k % 2 === 0) sound.kick(at)
+      if (k % 8 === 2 || k % 8 === 6) sound.snare(at)
+      sound.hat(at + step / 2, 0.015)
+      if (bar >= 2) sound.bassAt(N(bass + (k % 4 === 3 ? 12 : 0)), at, step * 0.9)
+      rg.scheduled++
+    }
+  }
+
+  const laneX = (i: number) => Math.round(w / 2 + (i - 1.5) * 30)
+  const hitY = () => groundY - 6
+
+  function judge(text: string, color: string) {
+    judgeEl.textContent = text
+    judgeEl.style.color = color
+    judgeEl.hidden = false
+    judgeEl.classList.remove('pop')
+    void judgeEl.offsetWidth
+    judgeEl.classList.add('pop')
+  }
+
+  function hitLane(lane: number) {
+    if (!rg.on || rg.ended) return
+    rg.press[lane] = performance.now()
+    const t = songT()
+    let best: Note | null = null
+    for (const n of rg.notes) if (!n.hit && !n.missed && n.lane === lane && Math.abs(n.t - t) < 0.16 && (!best || Math.abs(n.t - t) < Math.abs(best.t - t))) best = n
+    if (!best) {
+      sound.tick(900, 0.015)
+      return
+    }
+    best.hit = true
+    const err = Math.abs(best.t - t)
+    const q = err < 0.05 ? 0 : err < 0.1 ? 1 : 2
+    rg.hits[q]++
+    rg.combo++
+    rg.best = Math.max(rg.best, rg.combo)
+    rg.score += Math.round([300, 200, 100][q] * (1 + Math.min(rg.combo, 60) / 30))
+    judge(`${['PERFECT', 'GREAT', 'GOOD'][q]}${rg.combo > 3 ? ' ×' + rg.combo : ''}`, `rgb(${LANES[lane].join(',')})`)
+    const [root] = CHORDS[Math.floor(best.t / (4 * BEAT)) % 4]
+    sound.tone(N(root + [12, 16, 19, 24][lane]), 0.18, { wave: sound.pulse(0.25), vol: 0.045 })
+    // light one more sign in the city
+    const off = signs.filter((sg) => sg.state === 'off')
+    if (off.length && rg.combo % 3 === 0) powerOn(off[(Math.random() * off.length) | 0], performance.now())
+    for (let i = 0; i < 10; i++) rg.sparks.push({ x: laneX(lane), y: hitY(), vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2.5, life: 1, c: LANES[lane] })
+    shell.score(rg.score)
+  }
+
+  function missNote(n: Note) {
+    n.missed = true
+    rg.hits[3]++
+    rg.combo = 0
+    judge('MISS', '#8a7fa8')
+    sound.buzz()
+    const lit = signs.filter((sg) => sg.state === 'on')
+    if (lit.length) lit[(Math.random() * lit.length) | 0].glitchUntil = performance.now() + 500
+  }
+
+  function drawGame(now: number) {
+    const t = songT()
+    scheduleMusic()
+    const hy = hitY()
+    // lanes and receptors
+    for (let i = 0; i < 4; i++) {
+      const x = laneX(i)
+      const [r, g, b] = LANES[i]
+      sctx.fillStyle = `rgba(${r},${g},${b},0.08)`
+      sctx.fillRect(x - 12, 0, 24, hy + 4)
+      const lit = now - rg.press[i] < 110
+      sctx.fillStyle = `rgba(${r},${g},${b},${lit ? 1 : 0.55})`
+      sctx.fillRect(x - 12, hy, 24, 1)
+      sctx.fillRect(x - 12, hy + 3, 24, 1)
+      sctx.fillRect(x - 12, hy, 1, 4)
+      sctx.fillRect(x + 11, hy, 1, 4)
+      if (lit) {
+        sctx.globalCompositeOperation = 'lighter'
+        sctx.fillStyle = `rgba(${r},${g},${b},0.25)`
+        sctx.fillRect(x - 14, hy - 3, 28, 10)
+        sctx.globalCompositeOperation = 'source-over'
+      }
+    }
+    // notes: neon bars falling to the line
+    for (const n of rg.notes) {
+      if (n.hit) continue
+      if (!n.missed && t - n.t > 0.16) missNote(n)
+      const u = 1 - (n.t - t) / TRAVEL
+      if (u < 0 || u > 1.15) continue
+      const y = Math.round(u * hy)
+      const x = laneX(n.lane)
+      const [r, g, b] = LANES[n.lane]
+      const a = n.missed ? 0.25 : 1
+      sctx.globalCompositeOperation = 'lighter'
+      sctx.fillStyle = `rgba(${r},${g},${b},${0.18 * a})`
+      sctx.fillRect(x - 13, y - 3, 26, 8)
+      sctx.globalCompositeOperation = 'source-over'
+      sctx.fillStyle = `rgba(${r},${g},${b},${a})`
+      sctx.fillRect(x - 10, y, 20, 2)
+      sctx.fillStyle = `rgba(255,255,255,${0.8 * a})`
+      sctx.fillRect(x - 9, y, 18, 1)
+    }
+    for (const sp of rg.sparks) {
+      sp.x += sp.vx
+      sp.y += sp.vy
+      sp.vy += 0.12
+      sp.life -= 0.04
+      sctx.fillStyle = `rgba(${sp.c.join(',')},${Math.max(0, sp.life)})`
+      sctx.fillRect(Math.round(sp.x), Math.round(sp.y), 1, 1)
+    }
+    rg.sparks = rg.sparks.filter((sp) => sp.life > 0)
+    // countdown + end
+    if (t < 4 * BEAT * 2 && t > 0) {
+      const beat = Math.floor(t / BEAT)
+      if (beat >= 4 && beat < 8) judge(String(8 - beat), '#ffffff')
+    }
+    if (!rg.ended && t > rg.bars * 4 * BEAT + 0.6) {
+      rg.ended = true
+      const total = rg.notes.length
+      const acc = total ? (rg.hits[0] + rg.hits[1] * 0.7 + rg.hits[2] * 0.4) / total : 0
+      const grade = acc > 0.92 ? 'S' : acc > 0.8 ? 'A' : acc > 0.65 ? 'B' : acc > 0.45 ? 'C' : 'D'
+      shell.end(rg.score, `评级 ${grade} · 准确率 ${Math.round(acc * 100)}%`, `完美 ${rg.hits[0]} · 很好 ${rg.hits[1]} · 还行 ${rg.hits[2]} · 漏掉 ${rg.hits[3]} · 最大连击 ${rg.best}`, acc > 0.65)
+    }
+    shell.extra(`连击 ${rg.combo} · ${signs.filter((sg) => sg.state === 'on').length}/${signs.length} 块招牌`)
+  }
+
+  const shell = new GameShell(el, 'neon', '霓虹', {
+    start() {
+      signs.forEach((sg) => (sg.state = 'off'))
+      updateCount()
+      rg.music = sound.ready
+      rg.clock = rg.music ? () => sound.time : () => performance.now() / 1000
+      Object.assign(rg, { on: true, notes: chart(rg.bars), start: rg.clock() + 0.4, scheduled: 0, combo: 0, best: 0, score: 0, hits: [0, 0, 0, 0], sparks: [], ended: false })
+    },
+    stop() {
+      rg.on = false
+      judgeEl.hidden = true
+    },
+  })
+  window.addEventListener('keydown', (e) => {
+    if (!rg.on || e.repeat) return
+    const lane = KEYS[e.key]
+    if (lane === undefined) return
+    e.preventDefault()
+    hitLane(lane)
+  })
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!rg.on) return
+    const r = canvas.getBoundingClientRect()
+    const x = (e.clientX - r.left) / PX
+    let lane = 0
+    for (let i = 1; i < 4; i++) if (Math.abs(x - laneX(i)) < Math.abs(x - laneX(lane))) lane = i
+    if (Math.abs(x - laneX(lane)) < 40) hitLane(lane)
   })
 
   function frame(now: number) {
@@ -322,7 +534,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     // signs
     for (const s of signs) {
       const near = Math.hypot(mx - (s.x + s.size / 2), my - (s.y + s.size / 2)) < s.size * 0.9
-      if (near) powerOn(s, now)
+      if (near && !rg.on) powerOn(s, now)
       if (s.state === 'starting' && now > s.until) {
         s.state = 'on'
         updateCount()
@@ -348,6 +560,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
         sctx.globalCompositeOperation = 'source-over'
       }
     }
+    if (rg.on) drawGame(now)
     // rain
     sctx.fillStyle = 'rgba(170, 185, 255, 0.35)'
     for (const d of drops) {
@@ -386,12 +599,13 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
 
   return {
     id: 'neon',
-    num: '06',
+    num: '04',
     title: '霓虹',
     color: '#ff2bd6',
     transition: 'glitch',
     ambience: 'neon',
     el,
+    playing: () => shell.playing,
     consume(delta) {
       if (delta < 0) return false
       const next = signs.find((s) => s.state === 'off')
@@ -414,6 +628,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       active = false
       cancelAnimationFrame(raf)
       tip.hidden = true
+      shell.quit()
     },
   }
 }

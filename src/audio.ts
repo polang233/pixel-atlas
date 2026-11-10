@@ -135,13 +135,23 @@ class Sound {
   }
 
   /** one oscillator note with optional pitch slide */
-  tone(freq: number, dur: number, opts: { type?: OscillatorType; vol?: number; slide?: number; at?: number; attack?: number; dest?: AudioNode } = {}) {
+  tone(freq: number, dur: number, opts: { type?: OscillatorType; wave?: PeriodicWave; vol?: number; slide?: number; at?: number; attack?: number; dest?: AudioNode; vib?: number } = {}) {
     if (!this.ready) return
     const t = this.now() + (opts.at ?? 0)
     const o = this.ctx!.createOscillator()
     const g = this.ctx!.createGain()
-    o.type = opts.type ?? 'square'
+    if (opts.wave) o.setPeriodicWave(opts.wave)
+    else o.type = opts.type ?? 'square'
     o.frequency.setValueAtTime(freq, t)
+    if (opts.vib) {
+      const l = this.ctx!.createOscillator()
+      const lg = this.ctx!.createGain()
+      l.frequency.value = 5.5
+      lg.gain.value = freq * opts.vib
+      l.connect(lg).connect(o.frequency)
+      l.start(t + 0.12)
+      l.stop(t + dur + 0.05)
+    }
     if (opts.slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, opts.slide), t + dur)
     this.env(g, t, opts.vol ?? 0.06, opts.attack ?? 0.004, dur)
     o.connect(g).connect(opts.dest ?? this.sfxBus)
@@ -169,33 +179,210 @@ class Sound {
   }
 
   /** arpeggio */
-  arp(notes: number[], step = 0.055, opts: { type?: OscillatorType; vol?: number; len?: number; dest?: AudioNode; at?: number } = {}) {
-    notes.forEach((n, i) => this.tone(n, opts.len ?? step * 1.6, { type: opts.type, vol: opts.vol ?? 0.05, at: (opts.at ?? 0) + i * step, dest: opts.dest }))
+  arp(notes: number[], step = 0.055, opts: { type?: OscillatorType; wave?: PeriodicWave; vol?: number; len?: number; dest?: AudioNode; at?: number } = {}) {
+    notes.forEach((n, i) => n && this.tone(n, opts.len ?? step * 1.6, { type: opts.type, wave: opts.wave, vol: opts.vol ?? 0.05, at: (opts.at ?? 0) + i * step, dest: opts.dest }))
   }
 
-  /** a quantiser for the "colour depth" sounds: fewer bits = crunchier */
-  private crusher(bits: number): AudioNode {
-    const ws = this.ctx!.createWaveShaper()
-    const n = 4096
-    const curve = new Float32Array(n)
-    const L = 2 ** (bits - 1)
-    for (let i = 0; i < n; i++) {
-      const x = (i / (n - 1)) * 2 - 1
-      curve[i] = bits >= 16 ? x : Math.round(x * L) / L
+  /** seconds on the audio clock (falls back to the page clock before unlock) */
+  get time() {
+    return this.ctx && this.ctx.state === 'running' ? this.ctx.currentTime : performance.now() / 1000
+  }
+
+  private waves = new Map<number, PeriodicWave>()
+  /** pulse wave with the given duty cycle (0.125 / 0.25 / 0.5), like the old sound chips */
+  pulse(duty: number) {
+    let w = this.waves.get(duty)
+    if (!w && this.ctx) {
+      const n = 48
+      const re = new Float32Array(n)
+      const im = new Float32Array(n)
+      for (let k = 1; k < n; k++) im[k] = (2 / (k * Math.PI)) * Math.sin(k * Math.PI * duty)
+      w = this.ctx.createPeriodicWave(re, im)
+      this.waves.set(duty, w)
     }
-    ws.curve = curve
-    const post = this.ctx!.createGain()
-    post.gain.value = 0.07
-    ws.connect(post).connect(this.sfxBus)
-    setTimeout(() => ws.disconnect(), 2500)
-    return ws
+    return w
   }
 
-  /** the same little chime, played at a given bit depth */
-  depthChime(bits: number) {
+  private jingle: GainNode | null = null
+  /** a bus for one era jingle; starting the next one fades the previous out */
+  private jingleBus(bits: number, echo = 0) {
+    const ctx = this.ctx!
+    if (this.jingle) {
+      const old = this.jingle
+      old.gain.setTargetAtTime(0, ctx.currentTime, 0.04)
+      setTimeout(() => old.disconnect(), 400)
+    }
+    const g = ctx.createGain()
+    g.connect(this.sfxBus)
+    this.jingle = g
+    let into: AudioNode = g
+    if (bits < 16) {
+      const ws = ctx.createWaveShaper()
+      const n = 4096
+      const curve = new Float32Array(n)
+      const L = 2 ** (bits - 1)
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * 2 - 1
+        curve[i] = Math.round(x * L) / L
+      }
+      ws.curve = curve
+      const pre = ctx.createGain()
+      pre.gain.value = 1
+      const post = ctx.createGain()
+      post.gain.value = 0.09
+      pre.connect(ws).connect(post).connect(g)
+      into = pre
+    }
+    if (echo > 0) {
+      const d = ctx.createDelay(1)
+      d.delayTime.value = echo
+      const fb = ctx.createGain()
+      fb.gain.value = 0.38
+      const lp = ctx.createBiquadFilter()
+      lp.frequency.value = 2400
+      const wet = ctx.createGain()
+      wet.gain.value = bits < 16 ? 1 : 0.5
+      d.connect(fb).connect(lp).connect(d)
+      d.connect(wet).connect(bits < 16 ? into : g)
+      const send = ctx.createGain()
+      send.connect(into)
+      send.connect(d)
+      setTimeout(() => g.disconnect(), 6000)
+      return send
+    }
+    setTimeout(() => g.disconnect(), 6000)
+    return into
+  }
+
+  /**
+   * One short jingle per colour-depth era, each in the voice of that era's
+   * sound hardware — and a little longer than a UI blip, so you can hear it.
+   */
+  eraJingle(stage: number) {
     if (!this.ready) return
-    const dest = this.crusher(bits)
-    this.arp([523, 659, 784, 1047], 0.075, { type: 'triangle', vol: 0.75, len: 0.32, dest })
+    const N = (m: number) => 440 * 2 ** ((m - 69) / 12)
+    switch (stage) {
+      case 0: {
+        // today: soft pad chord + a bell melody with a long echo
+        const d = this.jingleBus(16, 0.24)
+        for (const m of [48, 55, 59, 62, 64]) {
+          this.tone(N(m), 2.4, { type: 'sawtooth', vol: 0.012, attack: 0.5, dest: d })
+          this.tone(N(m) * 1.004, 2.4, { type: 'sawtooth', vol: 0.01, attack: 0.6, dest: d })
+        }
+        ;[76, 79, 83, 86, 84, 79].forEach((m, i) => {
+          this.tone(N(m), 0.9, { type: 'sine', vol: 0.06, at: 0.1 + i * 0.2, dest: d })
+          this.tone(N(m) * 2, 0.4, { type: 'sine', vol: 0.015, at: 0.1 + i * 0.2, dest: d })
+        })
+        break
+      }
+      case 1: {
+        // 16-bit era computers: sample-ish strings + echo, 8-bit DAC
+        const d = this.jingleBus(8, 0.19)
+        const mel = [67, 71, 74, 79, 78, 74, 76, 0, 79]
+        mel.forEach((m, i) => m && this.tone(N(m), 0.36, { type: 'triangle', vol: 0.55, at: i * 0.16, dest: d, vib: 0.006 }))
+        ;[43, 50, 47, 52].forEach((m, i) => this.tone(N(m), 0.62, { type: 'sawtooth', vol: 0.25, at: i * 0.36, dest: d }))
+        this.tone(N(79) * 0.5, 1.2, { type: 'triangle', vol: 0.3, at: 1.28, dest: d, vib: 0.01 })
+        break
+      }
+      case 2: {
+        // 8-bit consoles: two pulse channels + triangle bass, 5-bit crunch
+        const d = this.jingleBus(5)
+        const p25 = this.pulse(0.25)
+        const p50 = this.pulse(0.5)
+        const lead = [72, 76, 79, 84, 0, 83, 79, 81, 0, 84]
+        lead.forEach((m, i) => m && this.tone(N(m), 0.12, { wave: p25, vol: 0.6, at: i * 0.11, dest: d }))
+        ;[64, 67, 71, 67, 65, 69, 72, 69].forEach((m, i) => this.tone(N(m), 0.06, { wave: p50, vol: 0.3, at: i * 0.11 + 0.05, dest: d }))
+        ;[48, 48, 55, 53].forEach((m, i) => this.tone(N(m), 0.24, { type: 'triangle', vol: 0.7, at: i * 0.22, dest: d }))
+        this.tone(N(84), 0.5, { wave: p25, vol: 0.5, at: 1.1, dest: d, vib: 0.02 })
+        break
+      }
+      case 3: {
+        // handheld: thin 12.5% pulse, noise hats, 4 bits through a tiny speaker
+        const d = this.jingleBus(4)
+        const p12 = this.pulse(0.125)
+        const lp = this.ctx!.createBiquadFilter()
+        lp.type = 'bandpass'
+        lp.frequency.value = 1500
+        lp.Q.value = 0.4
+        lp.connect(d)
+        ;[79, 0, 79, 83, 86, 0, 84, 83, 81, 79].forEach((m, i) => m && this.tone(N(m), 0.1, { wave: p12, vol: 0.9, at: i * 0.12, dest: lp }))
+        ;[55, 55, 50, 50, 52].forEach((m, i) => this.tone(N(m), 0.2, { type: 'triangle', vol: 0.6, at: i * 0.24, dest: lp }))
+        for (let i = 0; i < 6; i++) this.noise(0.03, { f0: 6000, type: 'highpass', vol: 0.05, at: i * 0.24 + 0.12 })
+        this.tone(N(91), 0.35, { wave: p12, vol: 0.7, at: 1.25, dest: lp, slide: N(79) })
+        break
+      }
+      default: {
+        // 1-bit beeper: one square voice, chords faked by very fast arpeggios
+        const d = this.jingleBus(2)
+        const chords = [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]]
+        let t = 0
+        chords.forEach((c) => {
+          for (let k = 0; k < 9; k++) {
+            this.tone(N(c[k % 3] + 12), 0.03, { type: 'square', vol: 0.5, at: t, dest: d })
+            t += 0.035
+          }
+        })
+        this.tone(N(72), 0.4, { type: 'square', vol: 0.5, at: t + 0.02, dest: d })
+        break
+      }
+    }
+  }
+
+  // ---- game sounds ------------------------------------------------------------------
+  jump() {
+    this.tone(300, 0.14, { wave: this.pulse(0.25), vol: 0.05, slide: 720 })
+  }
+  coin() {
+    this.tone(988, 0.06, { wave: this.pulse(0.5), vol: 0.04 })
+    this.tone(1319, 0.22, { wave: this.pulse(0.5), vol: 0.04, at: 0.06 })
+  }
+  stomp() {
+    this.tone(500, 0.1, { type: 'square', vol: 0.06, slide: 120 })
+    this.noise(0.05, { f0: 900, q: 0.8, vol: 0.06 })
+  }
+  hurt() {
+    this.tone(400, 0.3, { type: 'sawtooth', vol: 0.06, slide: 90 })
+    this.noise(0.12, { f0: 1600, q: 0.6, vol: 0.08 })
+  }
+  win() {
+    this.arp([523, 659, 784, 1047, 784, 1047, 1319], 0.09, { wave: this.pulse(0.25), vol: 0.05, len: 0.16 })
+  }
+  over() {
+    this.arp([392, 370, 349, 330, 262], 0.16, { type: 'triangle', vol: 0.07, len: 0.3 })
+  }
+  eat(size: number) {
+    const f = 900 - Math.min(600, size * 9)
+    this.tone(f, 0.08, { type: 'square', vol: 0.05, slide: f * 0.5 })
+    this.bubble(0.03)
+  }
+  grow() {
+    this.arp([392, 523, 659, 784], 0.06, { type: 'triangle', vol: 0.05, len: 0.2 })
+  }
+  /** one drum or note at an absolute audio-clock time */
+  kick(at: number) {
+    this.tone(150, 0.16, { type: 'sine', vol: 0.18, slide: 40, at: Math.max(0, at - this.time) })
+  }
+  hat(at: number, vol = 0.025) {
+    this.noise(0.03, { f0: 8000, type: 'highpass', vol, at: Math.max(0, at - this.time) })
+  }
+  snare(at: number) {
+    this.noise(0.12, { f0: 1800, q: 0.7, vol: 0.07, at: Math.max(0, at - this.time) })
+    this.tone(220, 0.06, { type: 'triangle', vol: 0.05, at: Math.max(0, at - this.time), slide: 160 })
+  }
+  bassAt(freq: number, at: number, dur = 0.2) {
+    this.tone(freq, dur, { wave: this.pulse(0.5), vol: 0.035, at: Math.max(0, at - this.time) })
+  }
+  lane(i: number, good = true) {
+    const f = [523, 659, 784, 988][i] ?? 523
+    this.tone(good ? f : f / 2, 0.16, { wave: this.pulse(0.25), vol: 0.05 })
+    if (good) this.tone(f * 2, 0.08, { type: 'triangle', vol: 0.02, at: 0.02 })
+  }
+  eyeOpen() {
+    this.tone(90, 0.6, { type: 'sine', vol: 0.05, slide: 70, attack: 0.2 })
+  }
+  banish() {
+    this.noise(0.25, { f0: 3000, f1: 400, q: 2, vol: 0.05 })
+    this.tone(660, 0.18, { type: 'triangle', vol: 0.04, slide: 1320 })
   }
 
   // ---- named sounds ---------------------------------------------------------
@@ -461,6 +648,26 @@ class Sound {
           const v = 0.05 + m * 0.14
           this.tone(62, 0.12, { type: 'sine', vol: v, slide: 38 })
           this.tone(58, 0.12, { type: 'sine', vol: v * 0.7, slide: 36, at: 0.17 })
+        })
+        break
+      }
+      case 'cart': {
+        // the platformer's loop: pulse lead, pulse harmony, triangle bass, noise drums — 132 bpm
+        const p25 = this.pulse(0.25)
+        const p50 = this.pulse(0.5)
+        const N = (m: number) => 440 * 2 ** ((m - 69) / 12)
+        const lead = [76, 0, 79, 76, 74, 72, 74, 0, 76, 79, 81, 79, 76, 0, 74, 0, 72, 0, 74, 76, 79, 0, 76, 74, 72, 74, 76, 72, 69, 0, 71, 0]
+        const bass = [45, 45, 52, 45, 41, 41, 48, 41, 43, 43, 50, 43, 40, 40, 47, 44]
+        let step = 0
+        every(114, () => {
+          if (!this.ready) return
+          const n = lead[step % 32]
+          if (n) this.tone(N(n), 0.1, { wave: p25, vol: 0.016, dest: out })
+          if (n && step % 2 === 0) this.tone(N(n - 4), 0.08, { wave: p50, vol: 0.008, dest: out })
+          if (step % 2 === 0) this.tone(N(bass[(step / 2) % 16]), 0.2, { type: 'triangle', vol: 0.05, dest: out })
+          if (step % 4 === 0) this.tone(140, 0.08, { type: 'sine', vol: 0.06, slide: 50, dest: out })
+          if (step % 4 === 2) this.noise(0.04, { f0: 5000, type: 'highpass', vol: 0.014 })
+          step++
         })
         break
       }

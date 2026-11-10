@@ -30,7 +30,6 @@ import { zhLabel } from '../zh'
 
 export interface HeroHooks {
   toWorkshop(sprite: HTMLCanvasElement, info: CellInfo): void
-  next(): void
 }
 
 const VERT = `#version 300 es
@@ -390,7 +389,9 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   const tech = $('.hero-tech')
   const hint = $('.hero-hint')
   const intro = $('.hero-intro')
-  const touch = matchMedia('(pointer: coarse)').matches
+  const coarse = matchMedia('(pointer: coarse)')
+  let touch = coarse.matches
+  coarse.addEventListener('change', () => (touch = coarse.matches))
 
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false })
   if (!gl) throw new Error('需要 WebGL2')
@@ -570,6 +571,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   const cctx = cardCanvas.getContext('2d')!
 
   async function select(cell: number) {
+    if (!Number.isFinite(cell) || cell < 0) return
     if (cell < 0) return
     const [x, y] = cellXY(cell)
     if (Math.hypot(x - D, y - D) > R) return
@@ -780,12 +782,30 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     }
     flyToCell(cell)
   })
-  $('.hero-next').addEventListener('click', () => hooks.next())
+  // zoom buttons: the same zoom as the wheel, around the screen centre
+  el.querySelectorAll<HTMLButtonElement>('[data-zoom]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const k = b.dataset.zoom
+      if (k === 'fit') {
+        deselect()
+        flyTo(D, D, zFit())
+      } else zoomAt(k === 'in' ? 2.2 : 1 / 2.2, W / 2, Hh / 2)
+      sound.click()
+    }),
+  )
+  window.addEventListener('keydown', (e) => {
+    if (!el.classList.contains('is-active') || e.target instanceof HTMLInputElement) return
+    if (e.key === '+' || e.key === '=') zoomAt(1.8, W / 2, Hh / 2)
+    else if (e.key === '-' || e.key === '_') zoomAt(1 / 1.8, W / 2, Hh / 2)
+    else if (e.key === '0') flyTo(D, D, zFit())
+    else if (e.key === 'q' || e.key === 'Q') rotatePlanet(-0.12)
+    else if (e.key === 'e' || e.key === 'E') rotatePlanet(0.12)
+  })
 
   // ---- pointer --------------------------------------------------------------------------
   const pointers = new Map<number, { x: number; y: number }>()
   let drag: { mode: 'rotate' | 'pan'; sx: number; sy: number; moved: boolean; last: number } | null = null
-  let pinch: { d: number; mx: number; my: number } | null = null
+  let pinch: { d: number; mx: number; my: number; ang: number } | null = null
   let hoverCell = -1
   let mouse = { x: -1, y: -1, inside: false }
   let rotAcc = 0
@@ -807,12 +827,16 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     lastInput = performance.now()
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()]
-      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, ang: Math.atan2(b.y - a.y, b.x - a.x) }
       drag = null
       return
     }
-    drag = { mode: cam.z < zFit() * 3.2 ? 'rotate' : 'pan', sx: p.x, sy: p.y, moved: false, last: performance.now() }
+    const [cx0, cy0] = toScreen(D, D)
+    const rDisc = R * cam.z
+    const onRim = Math.hypot(p.x - cx0, p.y - cy0) > rDisc * 0.97 && Math.hypot(p.x - cx0, p.y - cy0) < rDisc * 1.35 + 30
+    drag = { mode: e.shiftKey || e.button === 2 || onRim ? 'rotate' : 'pan', sx: p.x, sy: p.y, moved: false, last: performance.now() }
     canvas.classList.add('is-grabbing')
+    canvas.classList.toggle('is-rotating', drag.mode === 'rotate')
   })
 
   canvas.addEventListener('pointermove', (e) => {
@@ -830,7 +854,13 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const [nx, ny] = toWorld(mx, my)
       cam.x += wx - nx
       cam.y += wy - ny
-      pinch = { d, mx, my }
+      // two-finger twist turns the planet
+      const ang = Math.atan2(b.y - a.y, b.x - a.x)
+      let da = ang - pinch.ang
+      if (da > Math.PI) da -= 2 * Math.PI
+      if (da < -Math.PI) da += 2 * Math.PI
+      if (cam.z < zFit() * 4) rotatePlanet(da)
+      pinch = { d, mx, my, ang }
       return
     }
     if (drag && prev) {
@@ -868,20 +898,26 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       lastInput = now
       return
     }
+    {
+      const [cx0, cy0] = toScreen(D, D)
+      const dd = Math.hypot(p.x - cx0, p.y - cy0)
+      canvas.classList.toggle('is-rim', dd > R * cam.z * 0.97 && dd < R * cam.z * 1.35 + 30)
+    }
     updateHover()
   })
 
   const endPointer = (e: PointerEvent) => {
     pointers.delete(e.pointerId)
     if (pointers.size < 2) pinch = null
-    canvas.classList.remove('is-grabbing')
+    canvas.classList.remove('is-grabbing', 'is-rotating')
     if (!drag) return
     const p = local(e)
-    if (!drag.moved && e.type === 'pointerup') clickAt(p.x, p.y)
+    if (!drag.moved && e.type === 'pointerup' && e.button === 0) clickAt(p.x, p.y)
     if (performance.now() - drag.last > 80) vel.x = vel.y = vel.a = 0
     drag = null
   }
   canvas.addEventListener('pointerup', endPointer)
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   canvas.addEventListener('pointercancel', endPointer)
   canvas.addEventListener('pointerleave', () => {
     mouse.inside = false
@@ -895,7 +931,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       return
     }
     const cell = Math.floor(wy) * SIDE + Math.floor(wx)
-    if (cam.z < 8) flyTo(wx, wy, 56, () => select(cell))
+    if (cam.z < 8) flyTo(wx, wy, Math.max(9, cam.z * 4))
     else if (cell === selected) flyTo(Math.floor(wx) + 0.5, Math.floor(wy) + 0.5, zMax() * 0.9)
     else select(cell)
   }
@@ -1086,7 +1122,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     sound.set('wind', Math.min(1, zv * 0.35 + pv * 0.4 + (flight ? 0.25 : 0)))
     sound.set('pitch', Math.min(1, Math.log(z / zFit()) / Math.log(zMax() / zFit())))
 
-    const atMax = z >= zMax() * 0.985
+    // (the canvas can still be 0×0 on the first frames while the page lays out)
+    const atMax = W > 50 && Hh > 50 && z >= zMax() * 0.985
     if (atMax && !wasAtMax) {
       sound.lock()
       if (selected < 0) {
@@ -1105,16 +1142,16 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const lv = lod === 3 ? L2 : L1
       tech.textContent = `视野 ${fmt(Math.min(vw, SIDE))}×${fmt(Math.min(vh, SIDE))} 格 · ${lod >= 2 ? `瓦片 ${lv.loaded}/${lv.slots} · ` : ''}已下载 ${(bytesDownloaded() / 1e6).toFixed(1)} MB`
       hint.textContent = atMax
-        ? touch
-          ? '点「下一章」继续'
-          : '继续向下滚 → 第一章'
+        ? '已到原图 · 点素材看详情'
         : z < zFit() * 3.2
           ? touch
-            ? '拖动旋转 · 双指缩放 · 点一下飞过去'
-            : '拖动旋转星球 · 滚轮潜入 · 点任意一点飞过去'
-          : touch
-            ? '拖动平移 · 点素材看详情'
-            : '拖动平移 · 点素材看详情 · 再点一次放大'
+            ? '双指缩放 / 旋转 · 点一下放大'
+            : '滚轮缩放 · 拖动平移 · 拖外圈旋转 · 点一下放大'
+          : z < 8
+            ? '再点一下继续放大 · 滚轮缩放'
+            : touch
+              ? '拖动平移 · 点素材看详情'
+              : '拖动平移 · 点素材看详情 · 再点一次放到最大'
       intro.style.opacity = String(1 - smooth(1.4, 3, z / zFit()))
       el.classList.toggle('is-deep', z > 12)
     }
@@ -1136,20 +1173,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     ambience: 'space',
     el,
     consume(delta) {
-      if (flight) return true
-      if (delta > 0 && tgtZ >= zMax() * 0.999) return false
-      if (delta < 0 && tgtZ <= zFit() * 1.001) return false
-      let sx = mouse.inside ? mouse.x : W / 2
-      let sy = mouse.inside ? mouse.y : Hh / 2
-      if (selected >= 0) {
-        const [x, y] = cellXY(selected)
-        const [px, py] = toScreen(x, y)
-        if (px > 0 && py > 0 && px < W && py < Hh) {
-          sx = px
-          sy = py
-        }
-      }
-      zoomAt(Math.exp(delta * 0.0026), sx, sy)
+      if (flight) flight = null
+      zoomAt(Math.exp(-delta * 0.0026), mouse.inside ? mouse.x : W / 2, mouse.inside ? mouse.y : Hh / 2)
       return true
     },
     enter() {

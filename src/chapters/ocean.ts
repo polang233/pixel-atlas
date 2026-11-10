@@ -5,6 +5,7 @@
  * the sunlight only bioluminescence is left — and sonar.
  */
 import { sound } from '../audio'
+import { GameShell } from '../game'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
@@ -125,6 +126,140 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
     el.dataset.zone = String(z)
   }
 
+  // ---- mini game: big fish eats small fish -------------------------------------------------
+  interface Fish { spr: Sprite; x: number; y: number; size: number; vx: number; phase: number; glow: [number, number, number] | null; revealUntil: number }
+  const POOLS: { to: number; list: Sprite[]; glow?: [number, number, number] }[] = [
+    { to: 400, list: by(/tang|clownfish|puffer|seahorse|sea turtle|reef shark/) },
+    { to: 1400, list: by(/hammerhead|^jellyfish|^octopus|turtle|shark/) },
+    { to: 2600, list: by(/ghost jellyfish/), glow: [90, 230, 255] },
+    { to: 4001, list: by(/anglerfish|^jellyfish|dumbo/), glow: [190, 255, 120] },
+  ]
+  const START = 13
+  const WIN = 60
+  const game = {
+    on: false,
+    alive: true,
+    spr: by(/clownfish/)[0] ?? sprites[0],
+    x: 0, y: 0, size: START, face: 1, inv: 0,
+    fish: [] as Fish[],
+    score: 0,
+    eaten: 0,
+    keys: { x: 0, y: 0 },
+    pointer: false,
+    t0: 0,
+  }
+  const gameDepth = () => 60 + ((game.size - START) / (WIN - START)) * (MAX_D - 300)
+
+  function spawn(w: number, h: number, d: number) {
+    const pool = POOLS.find((p) => d < p.to) ?? POOLS[0]
+    const list = pool.list.length ? pool.list : sprites
+    const left = Math.random() < 0.5
+    // mostly smaller than you, some bigger — the ratio keeps the game fair as you grow
+    const r = Math.random()
+    const ratio = r < 0.62 ? 0.35 + Math.random() * 0.55 : r < 0.85 ? 1.15 + Math.random() * 0.5 : 1.8 + Math.random() * 1.2
+    const size = Math.max(6, Math.min(110, game.size * ratio))
+    game.fish.push({
+      spr: list[(Math.random() * list.length) | 0],
+      x: left ? -size : w + size,
+      y: 16 + Math.random() * (h - 32),
+      size,
+      vx: (left ? 1 : -1) * (0.25 + Math.random() * 0.45) * (ratio > 1 ? 0.8 : 1),
+      phase: Math.random() * 6,
+      glow: pool.glow && Math.random() < 0.6 ? pool.glow : null,
+      revealUntil: 0,
+    })
+  }
+
+  function stepGame(w: number, h: number, cam: number, _rowD: (y: number) => number, now: number) {
+    if (!game.alive) return
+    // steer toward the pointer, or with the arrow keys
+    const sp = 1.6 + 14 / game.size
+    let tx = game.x
+    let ty = game.y
+    if (game.keys.x || game.keys.y) {
+      tx = game.x + game.keys.x * 30
+      ty = game.y + game.keys.y * 30
+    } else if (game.pointer) {
+      tx = mx * w
+      ty = my * h
+    }
+    const dx = tx - game.x
+    const dy = ty - game.y
+    const dist = Math.hypot(dx, dy)
+    if (dist > 1) {
+      const v = Math.min(sp, dist * 0.12)
+      game.x += (dx / dist) * v
+      game.y += (dy / dist) * v
+      if (Math.abs(dx) > 2) game.face = Math.sign(dx)
+    }
+    game.x = Math.max(game.size / 2, Math.min(w - game.size / 2, game.x))
+    game.y = Math.max(game.size / 2, Math.min(h - game.size / 2, game.y))
+    game.inv = Math.max(0, game.inv - 1 / 60)
+    if (game.fish.length < 12 + Math.floor(w / 120) && Math.random() < 0.06) spawn(w, h, cam)
+    for (const f of game.fish) {
+      f.x += f.vx * (16 / Math.max(10, f.size)) ** 0.3
+      f.y += Math.sin(now / 900 + f.phase) * 0.08
+      const d = Math.hypot(f.x - game.x, f.y - game.y)
+      if (d < (f.size + game.size) * 0.3) {
+        if (game.size > f.size * 1.05) {
+          f.x = -9999
+          game.eaten++
+          game.score += Math.round(f.size * 10)
+          const before = Math.floor(game.size / 10)
+          game.size = Math.min(WIN, game.size + f.size * 0.11)
+          sound.eat(f.size)
+          for (let i = 0; i < 4; i++) bubbles.push({ x: game.x + (Math.random() - 0.5) * 8, y: game.y, r: 1, v: 0.3 + Math.random() * 0.4 })
+          if (Math.floor(game.size / 10) > before) sound.grow()
+          shell.score(game.score)
+          if (game.size >= WIN) {
+            game.alive = false
+            shell.end(game.score + 2000, '深渊霸主', `吃掉 ${game.eaten} 条 · 一路下潜到 ${Math.round(gameDepth()).toLocaleString('en-US')} m`, true)
+          }
+        } else if (f.size > game.size * 1.05 && game.inv <= 0) {
+          game.alive = false
+          sound.hurt()
+          sound.tone(300, 1.2, { type: 'sine', vol: 0.05, slide: 60 })
+          shell.end(game.score, '被吃掉了', `被一条更大的${f.spr.subject}吞下 · 吃掉 ${game.eaten} 条 · 最深 ${Math.round(cam).toLocaleString('en-US')} m`)
+        }
+      }
+    }
+    game.fish = game.fish.filter((f) => f.x > -f.size * 2 && f.x < w + f.size * 2)
+    progress = Math.min(1, (gameDepth() - 60) / (MAX_D - 180))
+    shell.extra(`体长 ${Math.round(game.size)} 像素 · 深度 ${Math.round(cam).toLocaleString('en-US')} m`)
+  }
+
+  const shell = new GameShell(el, 'ocean', '深海', {
+    start() {
+      const w = canvas.width
+      const h = canvas.height
+      Object.assign(game, { on: true, alive: true, x: w / 2, y: h / 2, size: START, face: 1, inv: 2, fish: [], score: 0, eaten: 0, t0: performance.now() })
+      for (let i = 0; i < 8; i++) {
+        spawn(w, h, 60)
+        game.fish[i].x = Math.random() * w
+      }
+      progress = 0
+    },
+    stop() {
+      game.on = false
+      game.fish = []
+    },
+  })
+  const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0], ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1] }
+  window.addEventListener('keydown', (e) => {
+    const a = arrows[e.key]
+    if (!a || !game.on) return
+    e.preventDefault()
+    if (a[0]) game.keys.x = a[0]
+    if (a[1]) game.keys.y = a[1]
+  })
+  window.addEventListener('keyup', (e) => {
+    const a = arrows[e.key]
+    if (!a) return
+    if (a[0]) game.keys.x = 0
+    if (a[1]) game.keys.y = 0
+  })
+  el.addEventListener('pointermove', () => (game.pointer = true))
+
   function frame(now: number) {
     const w = Math.ceil(el.clientWidth / PX)
     const h = Math.ceil(el.clientHeight / PX)
@@ -171,7 +306,7 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
             bl += 44 * caus
           }
         }
-        if (floor || (shelfY && x < w * 0.42 - (d - 192) * 0.8)) {
+        if (floor || (shelfY && !game.on && x < w * 0.42 - (d - 192) * 0.8)) {
           const l = Math.exp(-Math.max(0, d) / 900)
           const n = ((x * 13) ^ (y * 7)) & 7
           r = (floor ? 22 : 196) * l + n
@@ -214,45 +349,37 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
 
     // ---- creatures
     const halos: [number, number, [number, number, number], number][] = []
-    for (const c of creatures) {
-      if (!reducedMotion) c.x += c.speed * c.dir * 16
-      if (c.x > 1.1) c.x = -0.1
-      if (c.x < -0.1) c.x = 1.1
-      const size = 16 * c.scale
-      const bob = c.speed ? Math.sin(t * 1.4 + c.phase) * 2 : 0
-      const sx = Math.round(c.x * w + (mx - 0.5) * c.layer * -14 - size / 2)
-      const sy = Math.round(h / 2 + (c.depth - cam) * ppm + bob + (my - 0.5) * c.layer * -6 - size / 2)
-      if (sy > h || sy + size < 0) continue
-      const d = c.depth
+    /** draw one sprite into the water buffer, absorbed by depth like real light */
+    const blit = (spr: Sprite, sx: number, sy: number, size: number, flip: boolean, d: number, glow: [number, number, number] | null, phase: number, reveal: number, lit = 0) => {
+      d = Math.max(0, d)
       const light = Math.exp(-d / 650)
       const ar = Math.exp(-d / 110) * light
       const ag = Math.exp(-d / 650) * light
       const ab = Math.exp(-d / 2400) * light
-      const pulse = 0.75 + 0.25 * Math.sin(t * 2.2 + c.phase)
-      const reveal = Math.max(0, (c.revealUntil - now) / 1400)
-      const data = c.spr.data.data
-      const flip = c.dir < 0
+      const pulse = 0.75 + 0.25 * Math.sin(t * 2.2 + phase)
+      const data = spr.data.data
       const fog = PAL[Math.min(PAL.length - 1, Math.floor(depthU(d)))]
+      const k16 = 16 / size
       for (let py = 0; py < size; py++) {
         const yy = sy + py
         if (yy < 0 || yy >= h) continue
+        const uy = Math.min(15, Math.floor(py * k16))
         for (let px = 0; px < size; px++) {
           const xx = sx + px
           if (xx < 0 || xx >= w) continue
-          const ux = Math.floor(px / c.scale)
-          const uy = Math.floor(py / c.scale)
+          const ux = Math.min(15, Math.floor(px * k16))
           const o = (uy * 16 + (flip ? 15 - ux : ux)) * 4
           if (data[o + 3] < 128) continue
           let r: number, g: number, bl: number
-          if (c.glow && d > 900) {
+          if (glow && d > 900) {
             const k = pulse * 0.9
-            r = data[o] * 0.25 * k + c.glow[0] * 0.55 * k
-            g = data[o + 1] * 0.25 * k + c.glow[1] * 0.55 * k
-            bl = data[o + 2] * 0.25 * k + c.glow[2] * 0.55 * k
+            r = data[o] * 0.25 * k + glow[0] * 0.55 * k
+            g = data[o + 1] * 0.25 * k + glow[1] * 0.55 * k
+            bl = data[o + 2] * 0.25 * k + glow[2] * 0.55 * k
           } else {
-            r = data[o] * ar + fog[0] * 0.35
-            g = data[o + 1] * ag + fog[1] * 0.35
-            bl = data[o + 2] * ab + fog[2] * 0.35
+            r = data[o] * (ar + (1 - ar) * lit * 0.85) + fog[0] * 0.35
+            g = data[o + 1] * (ag + (1 - ag) * lit * 0.85) + fog[1] * 0.35
+            bl = data[o + 2] * (ab + (1 - ab) * lit * 0.85) + fog[2] * 0.35
           }
           if (reveal > 0) {
             const edge =
@@ -267,7 +394,31 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
           b[yy * w + xx] = pack(r, g, bl)
         }
       }
-      if (c.glow && d > 900) halos.push([sx + size / 2, sy + size / 2, c.glow, pulse])
+      if (glow && d > 900) halos.push([sx + size / 2, sy + size / 2, glow, pulse])
+    }
+    if (game.on) {
+      stepGame(w, h, cam, rowD, now)
+      for (const f of game.fish) {
+        const size = Math.round(f.size)
+        const dl = Math.hypot(f.x - game.x, f.y - game.y)
+        const lit = cam > 600 ? Math.max(0, 1 - dl / (40 + game.size)) : 0
+        blit(f.spr, Math.round(f.x - size / 2), Math.round(f.y - size / 2 + Math.sin(t * 2 + f.phase) * 1.5), size, f.vx < 0, rowD(f.y), f.glow, f.phase, Math.max(0, (f.revealUntil - now) / 1400), lit)
+      }
+      if (game.alive || Math.floor(now / 90) % 2) {
+        const size = Math.round(game.size)
+        blit(game.spr, Math.round(game.x - size / 2), Math.round(game.y - size / 2), size, game.face < 0, Math.min(rowD(game.y), 300), cam > 900 ? [255, 214, 120] : null, 0, 0.35 + 0.15 * Math.sin(now / 200), 1)
+      }
+    } else
+    for (const c of creatures) {
+      if (!reducedMotion) c.x += c.speed * c.dir * 16
+      if (c.x > 1.1) c.x = -0.1
+      if (c.x < -0.1) c.x = 1.1
+      const size = Math.round(16 * c.scale)
+      const bob = c.speed ? Math.sin(t * 1.4 + c.phase) * 2 : 0
+      const sx = Math.round(c.x * w + (mx - 0.5) * c.layer * -14 - size / 2)
+      const sy = Math.round(h / 2 + (c.depth - cam) * ppm + bob + (my - 0.5) * c.layer * -6 - size / 2)
+      if (sy > h || sy + size < 0) continue
+      blit(c.spr, sx, sy, size, c.dir < 0, c.depth, c.glow, c.phase, Math.max(0, (c.revealUntil - now) / 1400))
     }
     // additive glow halos, quantised into rings
     for (const [cx, cy, col, p] of halos) {
@@ -302,6 +453,10 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
         const v = b[yy * w + xx]
         b[yy * w + xx] = pack((v & 255) + 30 * fade, ((v >> 8) & 255) + 200 * fade, ((v >> 16) & 255) + 190 * fade)
       }
+      for (const f of game.fish) {
+        const dd = Math.hypot(f.x - pg.x, f.y - pg.y)
+        if (Math.abs(dd - rad) < f.size / 2 + 2 && f.revealUntil < now + 600) f.revealUntil = now + 1400
+      }
       for (const c of creatures) {
         const size = 16 * c.scale
         const cx = c.x * w
@@ -328,12 +483,13 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
 
   return {
     id: 'ocean',
-    num: '05',
+    num: '03',
     title: '深海',
     color: '#1f70ab',
     transition: 'wave',
     ambience: 'ocean',
     el,
+    playing: () => shell.playing,
     consume(delta) {
       if (delta > 0 && progress >= 1) return false
       if (delta < 0 && progress <= 0) return false
@@ -351,6 +507,7 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
     leave() {
       active = false
       cancelAnimationFrame(raf)
+      shell.quit()
     },
   }
 }

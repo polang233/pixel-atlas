@@ -1,6 +1,6 @@
 import './style.css'
 import { sound } from './audio'
-import { createCrt } from './chapters/crt'
+import { createCart } from './chapters/cart'
 import { createCthulhu } from './chapters/cthulhu'
 import { createDepth } from './chapters/depth'
 import { createDungeon } from './chapters/dungeon'
@@ -17,6 +17,8 @@ import { reducedMotion } from './types'
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!
 const section = (id: string) => $<HTMLElement>(`.chapter[data-id="${id}"]`)
 
+type Area = 'hero' | 'worlds' | 'depth' | 'workshop' | 'outro'
+
 async function boot() {
   const names = ['depth', 'crt', 'workshop', 'dungeon', 'ocean', 'neon', 'cthulhu'] as const
   const strips = Object.fromEntries(
@@ -30,30 +32,29 @@ async function boot() {
       workshop.load(sprite, info.caption)
       goTo(chapters.indexOf(workshop))
     },
-    next: () => goTo(1),
   })
-  const chapters: Chapter[] = [
-    hero,
-    createDepth(section('depth'), strips.depth),
-    createCrt(section('crt'), strips.crt),
-    workshop,
+  const worlds: Chapter[] = [
+    createCart(section('cart'), strips.crt),
     createDungeon(section('dungeon'), strips.dungeon),
     createOcean(section('ocean'), strips.ocean),
     createNeon(section('neon'), strips.neon),
     createCthulhu(section('cthulhu'), strips.cthulhu),
-    createOutro(section('outro'), Object.values(strips).flat(), () => {
-      goTo(0).then(() => hero.focusSearch?.())
-    }),
   ]
+  const depth = createDepth(section('depth'), strips.depth)
+  const outro = createOutro(section('outro'), Object.values(strips).flat(), () => {
+    goTo(0).then(() => hero.focusSearch?.())
+  })
+  const chapters: Chapter[] = [hero, ...worlds, depth, workshop, outro]
+  const areaOf = (c: Chapter): Area => (worlds.includes(c) ? 'worlds' : (c.id as Area))
 
-  const hudNum = $('.hud-num')
-  const hudTitle = $('.hud-title')
-  const pips = $('.pips')
-  const map = $<HTMLElement>('.map')
-  const mapList = $('.map-list')
+  const hudHint = $('.hint')
+  const navButtons = [...document.querySelectorAll<HTMLButtonElement>('.topnav [data-go]')]
+  const worldbar = $<HTMLElement>('.worldbar')
+  const worldList = $('.worldbar-list')
   const sndBtn = $<HTMLButtonElement>('.snd-btn')
 
   let index = 0
+  let lastWorld = 1
   let busy = false
   let cooldownUntil = 0
   let edgeAcc = 0
@@ -78,58 +79,51 @@ async function boot() {
   })
   sound.onChange(() => {
     updateSound()
-    sound.ambience(chapters[index].ambience ?? null)
+    if (!chapters[index].playing?.()) sound.ambience(chapters[index].ambience ?? null)
   })
   updateSound()
 
-  // ---- nav chrome ----------------------------------------------------------------------
-  const pipButtons = chapters.map((c, i) => {
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.title = `${c.num} ${c.title}`
-    b.setAttribute('aria-label', `${c.num} ${c.title}`)
-    b.addEventListener('click', () => goTo(i))
-    b.addEventListener('pointerenter', () => sound.tick(1600 + i * 120, 0.012))
-    pips.append(b)
-    return b
-  })
-
-  const pick = (list: Sprite[], re: RegExp) => (list.find((s) => re.test(s.subject)) ?? list[0]).url
-  const thumbs: Record<string, string> = {
-    hero: '/atlas/overview.png',
-    depth: pick(strips.depth, /potion/),
-    crt: pick(strips.crt, /slime/),
-    workshop: pick(strips.workshop, /apple|orb/),
-    dungeon: pick(strips.dungeon, /torch/),
-    ocean: pick(strips.ocean, /angler|jelly/),
-    neon: pick(strips.neon, /arcade|cassette/),
-    cthulhu: pick(strips.cthulhu, /tentacled eye|eye/),
-    outro: pick(strips.depth, /chest/),
-  }
-  const mapButtons = chapters.map((c, i) => {
-    const li = document.createElement('li')
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.style.background = c.color
-    if (['#f4ecd8', '#ff2bd6'].includes(c.color)) b.style.color = '#15121c'
-    b.innerHTML = `<span class="n">${c.num}</span><img src="${thumbs[c.id]}" alt="" class="${c.id === 'hero' ? 'round' : ''}" /><span class="t">${c.title}</span>`
+  // ---- nav ------------------------------------------------------------------------------
+  navButtons.forEach((b, i) => {
     b.addEventListener('click', () => {
-      toggleMap(false)
-      goTo(i)
+      const go = b.dataset.go as Area
+      goTo(go === 'worlds' ? lastWorld : chapters.findIndex((c) => c.id === go))
     })
-    b.addEventListener('pointerenter', () => sound.tick(1500 + i * 110, 0.015))
-    li.append(b)
-    mapList.append(li)
+    b.addEventListener('pointerenter', () => sound.tick(1500 + i * 160, 0.014))
+  })
+  const worldButtons = worlds.map((c, k) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.innerHTML = `<b>${c.num}</b>${c.title}`
+    b.addEventListener('click', () => goTo(k + 1))
+    b.addEventListener('pointerenter', () => sound.tick(1700 + k * 120, 0.012))
+    worldList.append(b)
     return b
   })
+  worldbar.querySelectorAll<HTMLButtonElement>('[data-step]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const k = index - 1 + Number(b.dataset.step)
+      goTo(1 + ((k + worlds.length) % worlds.length))
+    }),
+  )
+
+  const HINTS: Record<Area, string> = {
+    hero: '<kbd>滚轮</kbd> 缩放 <kbd>/</kbd> 搜索',
+    worlds: '<kbd>滚轮</kbd><kbd>↑↓</kbd> 浏览 · 点「玩一局」开始',
+    depth: '<kbd>←→</kbd><kbd>滚轮</kbd> 换年代 · 点画面重听',
+    workshop: '选一个工具，在画布上拖动',
+    outro: '',
+  }
 
   function updateHud() {
     const c = chapters[index]
-    hudNum.textContent = c.num
-    hudTitle.textContent = c.title
-    pipButtons.forEach((b, i) => b.setAttribute('aria-current', String(i === index)))
-    mapButtons.forEach((b, i) => b.setAttribute('aria-current', String(i === index)))
+    const area = areaOf(c)
+    navButtons.forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === area)))
+    worldButtons.forEach((b, k) => b.setAttribute('aria-current', String(worlds[k] === c)))
+    worldbar.hidden = area !== 'worlds'
+    hudHint.innerHTML = HINTS[area]
     document.body.dataset.chapter = c.id
+    document.body.dataset.area = area
     if (location.hash.slice(1) !== c.id) history.replaceState(null, '', `#${c.id}`)
   }
 
@@ -137,6 +131,7 @@ async function boot() {
     chapters[index].leave?.()
     chapters[index].el.classList.remove('is-active')
     index = i
+    if (areaOf(chapters[i]) === 'worlds') lastWorld = i
     chapters[index].el.classList.add('is-active')
     chapters[index].enter?.(dir)
     sound.ambience(chapters[index].ambience ?? null)
@@ -161,15 +156,20 @@ async function boot() {
     cooldownUntil = performance.now() + 650
   }
 
-  /** Route scroll-like input: the chapter first, then page navigation. */
+  /**
+   * Route scroll-like input. Every page gets it first; only the worlds
+   * page on to the next world once the current one is done with it.
+   */
   function input(delta: number) {
-    if (busy || !map.hidden) return
+    if (busy) return
     const c = chapters[index]
+    if (c.playing?.()) return
     if (c.consume?.(delta)) {
       edgeAcc = 0
       consuming = true
       return
     }
+    if (areaOf(c) !== 'worlds') return
     // the chapter just hit its end: hold briefly so scroll momentum
     // doesn't skip the final frame of that chapter
     if (consuming) {
@@ -181,13 +181,16 @@ async function boot() {
     if (Math.abs(edgeAcc) > 90) {
       const next = index + Math.sign(edgeAcc)
       edgeAcc = 0
-      goTo(next)
+      if (next >= 1 && next <= worlds.length) goTo(next)
     }
   }
 
   window.addEventListener(
     'wheel',
     (e) => {
+      // let scrollable panels (workshop side, outro) scroll natively
+      const t = e.target as HTMLElement
+      if (t.closest?.('[data-scroll]')) return
       e.preventDefault()
       const d = e.deltaMode === 1 ? e.deltaY * 32 : e.deltaY
       input(Math.max(-220, Math.min(220, d)))
@@ -200,8 +203,8 @@ async function boot() {
   window.addEventListener(
     'touchstart',
     (e) => {
-      const own = (e.target as HTMLElement).closest?.('[data-own-touch], input, button, a, label')
-      touchY = own ? null : e.touches[0].clientY
+      const own = (e.target as HTMLElement).closest?.('[data-own-touch], [data-scroll], input, button, a, label')
+      touchY = own || areaOf(chapters[index]) === 'hero' ? null : e.touches[0].clientY
     },
     { passive: true },
   )
@@ -217,24 +220,20 @@ async function boot() {
   )
   window.addEventListener('touchend', () => (touchY = null))
 
-  /** Keys step through a chapter's internal progress in chunks, then pages. */
+  /** Keys step through a world's internal progress in chunks, then on to the next world. */
   function keyStep(dir: 1 | -1) {
     const c = chapters[index]
+    if (areaOf(c) !== 'worlds') return
     if (c.consume) {
       let n = 0
       const id = setInterval(() => {
         if (!c.consume?.(dir * 120) || ++n >= 4) {
           clearInterval(id)
-          if (n === 0) goTo(index + dir)
+          const next = index + dir
+          if (n === 0 && next >= 1 && next <= worlds.length) goTo(next)
         }
       }, 40)
     } else goTo(index + dir)
-  }
-
-  function toggleMap(show = map.hidden) {
-    map.hidden = !show
-    sound.tone(show ? 660 : 440, 0.08, { type: 'square', vol: 0.04, slide: show ? 990 : 330 })
-    if (show) mapButtons[index].focus()
   }
 
   window.addEventListener('keydown', (e) => {
@@ -243,9 +242,7 @@ async function boot() {
       if (e.key === 'Escape') t.blur()
       return
     }
-    if (e.key === 'm' || e.key === 'M') return toggleMap()
-    if (e.key === 'Escape') return toggleMap(false)
-    if (!map.hidden) return
+    if (chapters[index].playing?.()) return
     if (e.key === '/') {
       e.preventDefault()
       if (index === 0) hero.focusSearch?.()
@@ -253,24 +250,28 @@ async function boot() {
       return
     }
     if (['ArrowDown', 'PageDown', ' '].includes(e.key)) {
+      if (areaOf(chapters[index]) !== 'worlds') return
       e.preventDefault()
       keyStep(1)
     } else if (['ArrowUp', 'PageUp'].includes(e.key)) {
+      if (areaOf(chapters[index]) !== 'worlds') return
       e.preventDefault()
       keyStep(-1)
-    } else if (e.key === 'Home') goTo(0)
-    else if (e.key === 'End') goTo(chapters.length - 1)
+    }
   })
 
-  $('.map-btn').addEventListener('click', () => toggleMap())
-  map.addEventListener('click', (e) => e.target === map && toggleMap(false))
   $('.logo').addEventListener('click', (e) => {
     e.preventDefault()
     goTo(0)
   })
+  window.addEventListener('hashchange', () => {
+    const i = chapters.findIndex((c) => c.id === location.hash.slice(1))
+    if (i >= 0) goTo(i)
+  })
 
   const start = Math.max(0, chapters.findIndex((c) => c.id === location.hash.slice(1)))
   index = start
+  if (areaOf(chapters[start]) === 'worlds') lastWorld = start
   chapters.forEach((c, i) => i !== start && c.leave?.())
   chapters[start].el.classList.add('is-active')
   chapters[start].enter?.(1)
