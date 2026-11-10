@@ -26,3 +26,6 @@ dist-ssr
 # generated streaming atlas (large; published separately)
 public/atlas/
 pipeline/.cache/
+
+# local-only notes, previews and experiments
+.local/
