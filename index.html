@@ -15,8 +15,7 @@
         <nav class="topnav" aria-label="主导航">
           <button type="button" data-go="hero">星图</button>
           <button type="button" data-go="worlds">世界</button>
-          <button type="button" data-go="depth">色深</button>
-          <button type="button" data-go="workshop">工坊</button>
+          <button type="button" data-go="workshop">共创工坊</button>
           <button type="button" data-go="outro">获取</button>
         </nav>
         <button class="snd-btn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span>点我开声音</span></button>
@@ -39,21 +38,25 @@
       <main id="stage">
         <!-- 00 星图 -->
         <section class="chapter ch-hero" data-id="hero" aria-label="星图">
-          <canvas class="hero-gl" data-own-touch aria-label="140 万张素材按平均色排成的星球，可拖动、缩放、点击"></canvas>
+          <canvas class="hero-gl" data-own-touch aria-label="140 万张素材按平均色分成八块陆地的世界地图，可拖动、缩放、点击；缩到最小会合拢成一颗星球"></canvas>
           <div class="hero-reticle" hidden><i></i><i></i><i></i><i></i></div>
           <div class="hero-hover" hidden></div>
           <div class="hero-tip pix" hidden></div>
+          <div class="hero-labels pix" aria-hidden="true"></div>
 
           <div class="hero-panel">
             <p class="eyebrow">VOL.1 · CC0 · 1,409,404 SPRITES</p>
             <h1>PIXEL<br />ATLAS</h1>
+            <button type="button" class="hero-logo pix" title="回到全图">PIXEL·ATLAS</button>
             <p class="hero-sub">像素图鉴 · <b>140 万</b>张 16×16 素材</p>
-            <p class="hero-intro">每一个点是一张素材的平均色。灰色沉在核心，彩色按色相绕成光环——暖色占了大半圈，因为游戏世界里最多的是木头、皮革和火光。</p>
+            <p class="hero-intro">每一格是一张素材，按平均色住在自己颜色的陆地上：灰色聚成中间的岛，彩色按色相围成一圈。暖色的陆地最大，因为游戏世界里最多的是木头、皮革和火光。</p>
             <form class="hero-search" autocomplete="off" role="search">
               <span class="pix" aria-hidden="true">&gt;</span>
               <input type="search" name="q" placeholder="搜索：史莱姆 / sword / 蓝色宝箱 / #ff4d6d" aria-label="搜索素材" enterkeyhint="go" />
               <button type="button" class="dice pix" title="随机飞到一张">随机</button>
             </form>
+            <p class="hero-crumb pix"></p>
+            <div class="hero-legend pix" role="group" aria-label="八块陆地"></div>
             <div class="hero-suggest">
               <span class="dim pix">试试</span>
               <button type="button" class="chip" data-q="史莱姆">史莱姆</button>
@@ -86,71 +89,57 @@
           </aside>
 
           <div class="hero-lod pix" aria-hidden="true">
-            <ol><li>星球</li><li>色块</li><li>缩略</li><li>原图</li></ol>
+            <ol><li>世界</li><li>色块</li><li>缩略</li><li>原图</li></ol>
             <p class="hero-tech"></p>
           </div>
           <p class="hero-hint pix"></p>
           <div class="hero-zoom pix" role="group" aria-label="缩放">
             <button type="button" data-zoom="in" aria-label="放大">+</button>
             <button type="button" data-zoom="out" aria-label="缩小">−</button>
-            <button type="button" data-zoom="fit" aria-label="回到整颗星球" title="回到整颗星球 (0)">◎</button>
+            <button type="button" data-zoom="fit" aria-label="回到全图" title="回到全图 (0)">◎</button>
+            <button type="button" data-zoom="planet" aria-label="在星球和地图之间切换" title="合拢成星球 / 展开成地图">◐</button>
           </div>
         </section>
 
-        <!-- 01 色深 -->
-        <section class="chapter ch-depth" data-id="depth" aria-label="色深">
-          <div class="depth-copy">
-            <p class="eyebrow pix">LESSON · COLOR DEPTH</p>
-            <h2 class="pix">色深</h2>
-            <p class="depth-stage-name pix"></p>
-            <p class="depth-era pix dim"></p>
-            <p class="depth-stage-desc"></p>
-            <ol class="depth-steps"></ol>
-            <label class="toggle"><input type="checkbox" class="dither-toggle" /> <span class="pix">有序抖动</span></label>
-          </div>
-          <div class="depth-board">
-            <canvas class="depth-canvas" width="768" height="576"></canvas>
-            <div class="depth-palette"></div>
-          </div>
-        </section>
 
-        <!-- W1 卡带 -->
-        <section class="chapter ch-cart" data-id="cart" aria-label="卡带">
-          <div class="cart-screen" data-own-touch>
-            <canvas class="cart-gl" aria-label="一块显像管屏幕：分割线左边是原始像素，右边是显像管效果"></canvas>
-            <div class="cart-split pix" aria-hidden="true"><span>原始像素</span><span>显像管</span></div>
+        <!-- W1 弹力 -->
+        <section class="chapter ch-cart" data-id="cart" aria-label="弹力">
+          <div class="bn-stage" data-own-touch>
+            <canvas class="bn-canvas" aria-label="一屋子有重量的素材：可以抓起来扔，落地会压扁"></canvas>
           </div>
           <div class="cart-copy world-copy">
-            <p class="eyebrow pix">WORLD 01 · CARTRIDGE</p>
-            <h2 class="pix">卡带</h2>
-            <p>同样的像素，隔着一块显像管玻璃就是另一幅画。扫描线把方块切成细条，荧光条把颜色拆成红绿蓝，光晕让亮部溢出来，曲面玻璃再把四角压弯——你记忆里的“像素感”，有一半是这块玻璃给的。</p>
-            <p class="world-hint pix">在屏幕上左右移动：金线左边是原始像素</p>
-            <div class="fx-row" role="group" aria-label="显像管的四种成分">
-              <button type="button" class="chip" data-fx="scan" aria-pressed="true">扫描线</button>
-              <button type="button" class="chip" data-fx="mask" aria-pressed="true">荧光条</button>
-              <button type="button" class="chip" data-fx="bloom" aria-pressed="true">光晕</button>
-              <button type="button" class="chip" data-fx="curve" aria-pressed="true">曲面</button>
+            <p class="eyebrow pix">WORLD 01 · BOUNCE</p>
+            <h2 class="pix">弹力</h2>
+            <p>像素角色只有十几格高，没地方画表情，生命感全靠<b>形变</b>：起跳前先拉长，落地时压扁，再弹回原样。压多少、回弹几下，就是这个角色的“重量”和“性格”。再加上几帧残影和一撮尘土，一张不会动的图就活了。</p>
+            <p class="world-hint pix">抓起一个扔出去 · 点空白处再掉一个下来 · 关掉下面任意一项再扔一次</p>
+            <div class="fx-row" role="group" aria-label="弹力的四种成分">
+              <button type="button" class="chip" data-bn="squash" aria-pressed="true">挤压拉伸</button>
+              <button type="button" class="chip" data-bn="trail" aria-pressed="true">残影</button>
+              <button type="button" class="chip" data-bn="dust" aria-pressed="true">尘土</button>
+              <button type="button" class="chip" data-bn="lowfps" aria-pressed="false">每秒 12 帧</button>
             </div>
             <div class="world-actions">
-              <button type="button" class="chip hot game-start">▶ 玩一局：光枪靶场</button>
+              <button type="button" class="chip hot game-start">▶ 玩一局：越滚越大</button>
             </div>
-            <p class="game-howto pix dim">点击开枪（或 <kbd>方向键</kbd> 瞄准 <kbd>空格</kbd> 开枪）· 连续命中涨倍率 · 别打头顶带 ✓ 的自己人</p>
+            <p class="game-howto pix dim">移动鼠标或 <kbd>←</kbd><kbd>→</kbd> 瞄准，点击或 <kbd>空格</kbd> 丢下去 · 两个一样的撞在一起会合成更大的 · 堆过虚线就结束</p>
+            <div class="bn-ladder" aria-label="合成顺序"></div>
           </div>
         </section>
 
         <!-- 03 工坊 -->
-        <section class="chapter ch-workshop" data-id="workshop" aria-label="像素工坊">
+        <section class="chapter ch-workshop" data-id="workshop" aria-label="共创工坊">
           <div class="ws-head">
-            <p class="eyebrow pix">TOOLS · WORKSHOP</p>
-            <h2 class="pix">像素工坊</h2>
+            <p class="eyebrow pix">CO-CREATE · WORKSHOP</p>
+            <h2 class="pix">共创工坊</h2>
           </div>
           <nav class="ws-tools" aria-label="工具">
-            <button type="button" data-tool="light"><b>01</b>高光</button>
-            <button type="button" data-tool="outline"><b>02</b>描边</button>
-            <button type="button" data-tool="swap"><b>03</b>换色</button>
-            <button type="button" data-tool="scale"><b>04</b>放大</button>
-            <button type="button" data-tool="rotate"><b>05</b>旋转</button>
-            <button type="button" data-tool="juice"><b>06</b>打击感</button>
+            <button type="button" data-tool="depth"><b>01</b>色深</button>
+            <button type="button" data-tool="light"><b>02</b>高光</button>
+            <button type="button" data-tool="outline"><b>03</b>描边</button>
+            <button type="button" data-tool="swap"><b>04</b>换色</button>
+            <button type="button" data-tool="scale"><b>05</b>放大</button>
+            <button type="button" data-tool="rotate"><b>06</b>旋转</button>
+            <button type="button" data-tool="juice"><b>07</b>打击感</button>
           </nav>
           <div class="ws-stage">
             <div class="ws-canvas-wrap" data-own-touch>
@@ -166,7 +155,12 @@
             <p class="ws-tool-desc"></p>
             <div class="ws-controls"></div>
             <p class="ws-stat pix"></p>
-            <p class="dim pix ws-tray-label">换一张素材</p>
+            <p class="dim pix ws-tray-label">换一张素材，或者用你自己的</p>
+            <div class="ws-import-row">
+              <button type="button" class="chip hot ws-import">＋ 导入图片</button>
+              <input type="file" class="ws-file" accept="image/*" hidden />
+            </div>
+            <p class="ws-import-note pix dim">也可以把图片拖进来，或直接粘贴 · 任何图片都会缩成 16×16 · 只在你的浏览器里处理，不上传</p>
             <div class="ws-tray"></div>
             <button type="button" class="chip ws-export">下载当前结果 PNG</button>
           </div>
@@ -183,7 +177,7 @@
             <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>。光照不到的地方不用画，玩家会自己把它想象得更可怕；光源越少，人越想往前走。</p>
             <p class="world-hint pix">移动鼠标：你就是火把 · 点击地面插一支 · <span class="dungeon-count"></span></p>
             <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：摸黑寻宝</button></div>
-            <p class="game-howto pix dim"><kbd>WASD</kbd> / <kbd>方向键</kbd> 或按住鼠标带路 · 火把既是视野也是生命 · 找钥匙，开门，再下一层</p>
+            <p class="game-howto pix dim"><kbd>WASD</kbd> 走 · <kbd>空格</kbd> 挥剑 · <kbd>E</kbd> 开箱、拜神像（鼠标：点哪砍哪，按住带路）· 三颗心是命，火把是视野 · 砸木桶、躲地刺、找钥匙开门</p>
           </div>
           <div class="dungeon-tip pix" role="status"></div>
           <canvas class="dungeon-game" data-own-touch hidden></canvas>
@@ -215,7 +209,7 @@
             <p class="eyebrow pix">WORLD 04 · NEON</p>
             <h2 class="pix">霓虹</h2>
             <p>霓虹风把颜色收成几种高饱和的光——洋红、青、紫——其余全压进黑里。每块招牌都是程序把一张素材“霓虹化”的结果：只留轮廓和最强的内边，再加一圈光晕。像素的硬边，正好就是灯管。</p>
-            <p class="world-hint pix">靠近招牌通电 · 滚动逐个点亮 · <span class="neon-count"></span></p>
+            <p class="world-hint pix">街道自己在打拍子：按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> 或点车道随手跟弹 · 靠近招牌通电 · <span class="neon-count"></span></p>
             <div class="world-actions">
               <button type="button" class="chip hot game-start">▶ 玩一局：节拍通电</button>
               <button type="button" class="chip neon-raw" aria-pressed="false">看原图</button>
@@ -241,12 +235,12 @@
             <p class="cth-text" data-src="克苏鲁风格从不把怪物画清楚。低饱和的墨绿与淤紫、不对称的轮廓、多出来的眼睛——16×16 的模糊恰好替你留白，剩下的交给玩家的想象。"></p>
             <div class="san"><span class="pix">SAN</span><div class="san-bar"><i></i></div><b class="pix san-num">100</b></div>
             <p class="world-hint pix cth-hint">继续向下……如果你确定的话</p>
-            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：禁忌图鉴</button></div>
-            <p class="game-howto pix dim">翻开两张相同的牌 · 翻错、拖延都会掉理智 · 理智越低，牌越不老实：它们会换位置，还会骗你</p>
+            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：别被看见</button></div>
+            <p class="game-howto pix dim">按住 <kbd>空格</kbd> 或屏幕前进 · 眼睛一睁就松手 · 身后的潮水不会停 · 蜡烛回理智，护符值 300 分但会吵醒它</p>
           </div>
-          <div class="cth-play" hidden>
-            <div class="cth-board" data-own-touch></div>
-            <button type="button" class="chip cth-peek">窥视全部 · −12 SAN <kbd>空格</kbd></button>
+          <div class="cth-play" data-own-touch hidden>
+            <canvas class="cth-game" aria-label="别被看见：眼睛闭着时前进，睁开时站住"></canvas>
+            <p class="cth-say pix" role="status"></p>
           </div>
         </section>
 

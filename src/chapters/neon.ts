@@ -294,6 +294,11 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       tip.hidden = true
       return
     }
+    // the cursor drags a few sparks through the rain
+    if (!reducedMotion && Math.random() < 0.5) {
+      const n = NEON[(Math.random() * NEON.length) | 0]
+      sparks.push({ x: mx, y: my, vx: (Math.random() - 0.5) * 0.8, vy: -Math.random() * 0.6, life: 0.5 + Math.random() * 0.3, c: [n[1], n[2], n[3]] })
+    }
     const hit = signs.find((s) => mx > s.x - 6 && mx < s.x + s.size + 6 && my > s.y - 6 && my < s.y + s.size + 6) ?? null
     if (hit !== hoverSign) {
       hoverSign = hit
@@ -348,6 +353,8 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     counted: 0,
     bars: 24,
     ended: false,
+    demoBar: 0,
+    jam: 0,
   }
   const songT = () => rg.clock() - rg.start
 
@@ -418,8 +425,55 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     judge(`电量过载 ×${rg.combo}`, '#ffffff')
   }
 
+  /** attract mode: a sparse endless chart that plays itself until someone joins in */
+  function demoFill(t: number) {
+    while (rg.demoBar * 4 * BEAT < t + TRAVEL + 2) {
+      const bar = rg.demoBar++
+      for (let k = 0; k < 8; k++) {
+        if (Math.random() > (k % 2 === 0 ? 0.5 : 0.14)) continue
+        rg.notes.push({ t: bar * 4 * BEAT + (k * BEAT) / 2, lane: (Math.random() * 4) | 0, hit: false, missed: false })
+      }
+    }
+    if (rg.notes.length > 80) rg.notes = rg.notes.filter((n) => n.t > t - 1)
+  }
+  function startDemo() {
+    rg.clock = () => performance.now() / 1000
+    Object.assign(rg, { notes: [], start: rg.clock(), demoBar: 1, rings: [], combo: 0, jam: 0, ended: false })
+  }
+  /** a lane fired outside a scored round: by the demo itself, or by a visitor jamming along */
+  function jam(lane: number, user: boolean, note?: Note) {
+    const now = performance.now()
+    rg.press[lane] = now
+    rg.rings.push({ lane, t0: now, q: user ? 0 : 1 })
+    const bar = Math.floor(songT() / (4 * BEAT))
+    const [root] = CHORDS[((bar % 4) + 4) % 4]
+    const n = user ? 16 : 6
+    for (let i = 0; i < n; i++) sparks.push({ x: laneX(lane) + (Math.random() - 0.5) * 16, y: hitY(), vx: (Math.random() - 0.5) * 4, vy: -Math.random() * 3.2 - 0.4, life: 0.6 + Math.random() * 0.5, c: LANES[lane] })
+    if (!user) {
+      sound.tone(N(root + [12, 16, 19, 24][lane]), 0.12, { type: 'triangle', vol: 0.012 })
+      const lit = signs.filter((sg) => sg.state === 'on')
+      if (lit.length && Math.random() < 0.5) lit[(Math.random() * lit.length) | 0].glitchUntil = now + 160
+      return
+    }
+    if (note) note.hit = true
+    rg.bump = 0.7
+    rg.jam++
+    sound.tone(N(root + [12, 16, 19, 24][lane]), 0.2, { wave: sound.pulse(0.25), vol: 0.045 })
+    const off = signs.filter((sg) => sg.state === 'off')
+    if (off.length) powerOn(off[(Math.random() * off.length) | 0], now)
+    else signs[(Math.random() * signs.length) | 0].glitchUntil = now + 240
+    if (note) judge(rg.jam >= 6 ? '手感不错 · 按 ▶ 开始计分' : 'NICE', `rgb(${LANES[lane].join(',')})`)
+  }
+
   function hitLane(lane: number) {
-    if (!rg.on || rg.ended) return
+    if (!rg.on) {
+      if (shell.playing) return
+      const t = songT()
+      const near = rg.notes.find((n) => !n.hit && n.lane === lane && Math.abs(n.t - t) < 0.16)
+      jam(lane, true, near)
+      return
+    }
+    if (rg.ended) return
     rg.press[lane] = performance.now()
     const t = songT()
     let best: Note | null = null
@@ -464,7 +518,9 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
 
   function drawGame(now: number) {
     const t = songT()
-    scheduleMusic()
+    const demo = !rg.on
+    if (demo) demoFill(t)
+    else scheduleMusic()
     const { laneW, vy, hy, cx } = track()
     const phase = t > 0 ? (t / BEAT) % 1 : 1
     const pulse = Math.max(0, 1 - phase * 2.6)
@@ -474,7 +530,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       const p = (y - vy) / (hy - vy)
       const sc = depthScale(p)
       const half = Math.round(2 * laneW * sc)
-      sctx.fillStyle = `rgba(5,3,12,${0.5 + 0.34 * Math.min(1, p)})`
+      sctx.fillStyle = `rgba(5,3,12,${(demo ? 0.3 : 0.5) + 0.34 * Math.min(1, p)})`
       sctx.fillRect(Math.round(cx) - half, y, half * 2, 1)
       for (let i = 0; i < 4; i++) {
         const held = now - rg.press[i]
@@ -519,7 +575,13 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     // notes: glowing bars that grow as they come closer
     for (const n of rg.notes) {
       if (n.hit) continue
-      if (!n.missed && t - n.t > 0.16) missNote(n)
+      if (demo) {
+        if (t >= n.t) {
+          jam(n.lane, false)
+          n.hit = true
+          continue
+        }
+      } else if (!n.missed && t - n.t > 0.16) missNote(n)
       const u = 1 - (n.t - t) / TRAVEL
       if (u < 0 || u > 1.14) continue
       const p = u ** 1.8
@@ -566,6 +628,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       }
     }
     sctx.globalCompositeOperation = 'source-over'
+    if (demo) return
     // combo counter above the road
     rg.comboPop = Math.max(0, rg.comboPop - 0.08)
     if (rg.combo >= 2) {
@@ -611,19 +674,23 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     stop() {
       rg.on = false
       judgeEl.hidden = true
+      startDemo()
     },
   })
   window.addEventListener('keydown', (e) => {
-    if (!rg.on || e.repeat) return
-    const lane = KEYS[e.key]
-    if (lane === undefined) return
+    if (!active || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
+    if (e.target instanceof HTMLInputElement) return
+    // outside a round only D F J K jam: the arrows still turn the page
+    const lane = rg.on ? KEYS[e.key] : 'dfjk'.indexOf(e.key.toLowerCase())
+    if (lane === undefined || lane < 0) return
     e.preventDefault()
     hitLane(lane)
   })
   canvas.addEventListener('pointerdown', (e) => {
-    if (!rg.on) return
+    if (shell.playing && !rg.on) return
     const r = canvas.getBoundingClientRect()
     const x = (e.clientX - r.left) / PX
+    if (!rg.on && ((e.clientY - r.top) / PX < track().vy + (hitY() - track().vy) * 0.45 || hoverSign)) return
     let lane = 0
     for (let i = 1; i < 4; i++) if (Math.abs(x - laneX(i)) < Math.abs(x - laneX(lane))) lane = i
     if (Math.abs(x - laneX(lane)) < track().laneW) hitLane(lane)
@@ -638,7 +705,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       if (!reducedMotion && Math.random() < 0.0015) win.on = !win.on
       if (!win.on) continue
       sctx.fillStyle = (win.x + win.y) % 3 ? '#e8b86a' : '#8ad7ff'
-      sctx.globalAlpha = rg.on ? 0.4 + rg.pulse * 0.6 : 0.55
+      sctx.globalAlpha = 0.4 + rg.pulse * (rg.on ? 0.6 : 0.4)
       sctx.fillRect(win.x, win.y, 2, 2)
     }
     sctx.globalAlpha = 1
@@ -685,10 +752,10 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
       sctx.fillStyle = 'rgba(255,255,255,0.9)'
       sctx.fillRect(Math.round(c.v > 0 ? c.x + c.len - 2 : c.x), c.y, 2, 1)
     }
-    if (rg.on) {
+    if (!showRaw) {
       // the horizon breathes with the kick drum
       sctx.globalCompositeOperation = 'lighter'
-      sctx.fillStyle = `rgba(255,43,214,${0.05 + rg.pulse * 0.1 + Math.min(0.12, rg.combo / 300)})`
+      sctx.fillStyle = `rgba(255,43,214,${(rg.on ? 0.05 : 0.02) + rg.pulse * (rg.on ? 0.1 : 0.06) + Math.min(0.12, rg.combo / 300)})`
       sctx.fillRect(0, groundY - 46, w, 46)
       sctx.globalCompositeOperation = 'source-over'
       drawGame(now)
@@ -726,7 +793,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     // a hit punches the camera in a little; a dropped combo jolts it sideways
     rg.bump = Math.max(0, rg.bump - 0.12)
     rg.jolt = Math.max(0, rg.jolt - 0.1)
-    const zoom = rg.on && !reducedMotion ? 1 + rg.bump * 0.018 + rg.pulse * 0.004 : 1
+    const zoom = !reducedMotion ? 1 + rg.bump * 0.018 + rg.pulse * 0.004 : 1
     const jx = rg.on && rg.jolt > 0 ? Math.round(Math.sin(now / 18) * rg.jolt * 4) : 0
     ctx.setTransform(zoom, 0, 0, zoom, (-w * (zoom - 1)) / 2 + jx, (-h * (zoom - 1)) * 0.7)
     ctx.imageSmoothingEnabled = false
@@ -776,6 +843,7 @@ export function createNeon(el: HTMLElement, sprites: Sprite[]): Chapter {
     enter() {
       layout()
       acc = 0
+      startDemo()
       active = true
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(frame)

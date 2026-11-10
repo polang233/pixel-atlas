@@ -1,8 +1,8 @@
 /**
  * 地牢 mini game · 摸黑寻宝. A small generated maze seen only by torchlight.
- * The torch is both your sight and your life: it burns down as you walk, and
- * everything that bites takes a chunk of it. Find the key, find the door, go
- * one floor deeper.
+ * The torch is your sight and burns down as you walk; three hearts are your
+ * life. Swing the sword at what bites, smash barrels, open chests, light
+ * braziers, pray at idols. Find the key, find the door, go one floor deeper.
  */
 import { sound } from '../audio'
 import { drawText, textWidth } from '../pixelfont'
@@ -16,10 +16,12 @@ const MH = CH * 4 + 1
 const LP = 2 // one light texel = 2 game pixels
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16)
 
-type ItemKind = 'coin' | 'torch' | 'key' | 'door' | 'chest' | 'mimic' | 'brazier' | 'web'
+type ItemKind = 'coin' | 'torch' | 'key' | 'door' | 'chest' | 'mimic' | 'brazier' | 'web' | 'barrel' | 'potion' | 'spikes' | 'idol'
 interface Item { kind: ItemKind; x: number; y: number; img: HTMLCanvasElement; taken: boolean; lit: boolean; t: number }
-type MobKind = 'rat' | 'spider' | 'skull'
-interface Mob { kind: MobKind; x: number; y: number; vx: number; vy: number; img: HTMLCanvasElement; t: number; next: number; face: number }
+type MobKind = 'rat' | 'spider' | 'skull' | 'skeleton' | 'mimic'
+interface Mob { kind: MobKind; x: number; y: number; vx: number; vy: number; img: HTMLCanvasElement; t: number; next: number; face: number; hp: number; max: number; hit: number; kx: number; ky: number }
+const MOB_HP: Record<MobKind, number> = { rat: 1, spider: 2, skull: 2, skeleton: 3, mimic: 4 }
+const MOB_SCORE: Record<MobKind, number> = { rat: 50, spider: 120, skull: 150, skeleton: 220, mimic: 400 }
 interface Bit { x: number; y: number; vx: number; vy: number; life: number; c: string }
 interface Pop { x: number; y: number; s: string; life: number; c: string }
 
@@ -54,6 +56,11 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     rat: all(/dire rat/),
     spider: all(/giant spider/),
     skull: all(/floating skull/),
+    skeleton: all(/^skeleton/),
+    mimic: all(/mimic chest/),
+    barrel: all(/barrel/),
+    potion: all(/potion vial/),
+    idol: all(/skull idol/),
   }
 
   // ---- tiles -------------------------------------------------------------------------
@@ -101,7 +108,12 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
   let mobs: Mob[] = []
   let bits: Bit[] = []
   let pops: Pop[] = []
-  const P = { x: 0, y: 0, face: 1, inv: 0, walk: 0, stepT: 0 }
+  const P = { x: 0, y: 0, face: 1, inv: 0, walk: 0, stepT: 0, ax: 1, ay: 0, atk: 0, cd: 0 }
+  let hp = 3
+  let maxHp = 3
+  let kills = 0
+  let wantAttack = false
+  let wantUse = false
   let fuel = 100
   let floor = 1
   let score = 0
@@ -131,6 +143,18 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
   function slide(o: { x: number; y: number }, dx: number, dy: number, r: number) {
     if (!blocked(o.x + dx, o.y, r)) o.x += dx
     if (!blocked(o.x, o.y + dy, r)) o.y += dy
+  }
+
+  function spawn(kind: MobKind, x: number, y: number) {
+    const max = MOB_HP[kind] + (kind === 'skeleton' && floor > 3 ? 1 : 0)
+    mobs.push({ kind, x, y, vx: 0, vy: 0, img: one(IMG[kind]), t: Math.random() * 3, next: 0, face: 1, hp: max, max, hit: 0, kx: 0, ky: 0 })
+  }
+  function drop(kind: ItemKind, x: number, y: number) {
+    const img = kind === 'coin' ? one(IMG.coin) : kind === 'torch' ? one(IMG.torch) : one(IMG.potion)
+    // items thrown out of a chest must not land inside a wall
+    const o = { x, y }
+    slide(o, (Math.random() - 0.5) * 22, (Math.random() - 0.5) * 22, 5)
+    items.push({ kind, x: o.x, y: o.y, img, taken: false, lit: false, t: Math.random() * 6 })
   }
 
   function generate() {
@@ -208,6 +232,12 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     take(Math.max(3, 6 - floor)).forEach((c) => put('torch', c, one(IMG.torch)))
     take(4).forEach((c) => put('brazier', c, one(IMG.brazier)))
     take(3).forEach((c, i) => put(i === 0 && floor > 1 ? 'mimic' : 'chest', c, one(IMG.chest)))
+    take(1).forEach((c) => put('idol', c, one(IMG.idol)))
+    for (let i = 0; i < 9; i++) put('barrel', 1 + ((Math.random() * (CW * CH - 1)) | 0), one(IMG.barrel), i % 3, i % 2 ? 0 : 2)
+    for (let i = 0; i < 3 + floor; i++) {
+      const c = 1 + ((Math.random() * (CW * CH - 1)) | 0)
+      if (c !== doorCell && c !== keyCell) put('spikes', c, floors[0], (Math.random() * 3) | 0, 1)
+    }
     take(4).forEach((c) => put('web', c, one(IMG.web), (Math.random() * 3) | 0, (Math.random() * 3) | 0))
     for (let c = 1; c < CW * CH; c++) {
       if (c === doorCell || Math.random() > 0.55) continue
@@ -218,11 +248,16 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     const far = Array.from({ length: CW * CH }, (_, c) => c).filter((c) => d0[c] > 2)
     const mob = (kind: MobKind) => {
       const [x, y] = at(one(far), (Math.random() * 3) | 0, (Math.random() * 3) | 0)
-      mobs.push({ kind, x, y, vx: 0, vy: 0, img: one(IMG[kind]), t: Math.random() * 3, next: 0, face: 1 })
+      spawn(kind, x, y)
     }
     for (let i = 0; i < 3 + floor; i++) mob('rat')
     for (let i = 0; i < 1 + floor; i++) mob('spider')
     for (let i = 0; i < Math.min(4, floor - 1); i++) mob('skull')
+    for (let i = 0; i < Math.min(5, 1 + Math.floor(floor / 2)); i++) mob('skeleton')
+    if (floor > 1) {
+      const [gx, gy] = at(doorCell, 0, 2)
+      spawn('skeleton', gx, gy)
+    }
     ;[P.x, P.y] = at(0)
     hasKey = false
   }
@@ -235,18 +270,130 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     hint = s
     hintUntil = performance.now() + ms
   }
-  const radius = () => (1.9 + 3.6 * Math.sqrt(Math.max(0, fuel) / 100)) * T
+  const radius = () => (1.35 + 4.1 * Math.sqrt(Math.max(0, fuel) / 100)) * T
 
   function bite(amount: number, fromX: number, fromY: number) {
     if (P.inv > 0 || !alive) return
-    fuel -= amount
+    hp--
+    fuel = Math.max(0, fuel - amount * 0.4)
     P.inv = 1.1
     shake = 0.35
     const d = Math.hypot(P.x - fromX, P.y - fromY) || 1
     slide(P, ((P.x - fromX) / d) * 10, ((P.y - fromY) / d) * 10, 5)
     sound.hurt()
     burst(P.x, P.y, '#ff9a3c', 10)
-    pop(P.x, P.y - 12, '-' + amount, '#ff4d6d')
+    pop(P.x, P.y - 12, '-1', '#ff4d6d')
+    if (hp <= 0) {
+      alive = false
+      sound.tone(240, 1.1, { type: 'triangle', vol: 0.05, slide: 50 })
+      ui.end(score, `倒在了第 ${floor} 层`, `击倒 ${kills} 只怪物 · 剑还握在手里`, floor >= 3)
+    }
+  }
+
+  function kill(m: Mob) {
+    m.t = -1
+    kills++
+    score += MOB_SCORE[m.kind]
+    burst(m.x, m.y, m.kind === 'skull' ? '#c8f4ff' : '#e8e2d0', 14)
+    pop(m.x, m.y - 10, '+' + MOB_SCORE[m.kind], '#c8f4ff')
+    sound.stomp()
+    const r = Math.random()
+    if (m.kind === 'mimic') for (let i = 0; i < 5; i++) drop('coin', m.x, m.y)
+    else if (r < 0.45) drop('coin', m.x, m.y)
+    else if (r < 0.58 && hp < maxHp) drop('potion', m.x, m.y)
+  }
+
+  function openChest(it: Item) {
+    it.taken = true
+    score += 150
+    sound.win()
+    burst(it.x, it.y, '#ffd84d', 22)
+    pop(it.x, it.y - 10, '+150')
+    for (let i = 0; i < 3; i++) drop('coin', it.x, it.y)
+    drop(Math.random() < 0.5 ? 'potion' : 'torch', it.x, it.y)
+  }
+  function wakeMimic(it: Item) {
+    it.taken = true
+    say('是宝箱怪！砍它！')
+    spawn('mimic', it.x, it.y)
+    sound.eyeOpen()
+    shake = 0.25
+  }
+
+  /** one sword swing along the aim direction */
+  function attack() {
+    if (P.cd > 0 || !alive) return
+    P.atk = 0.16
+    P.cd = 0.3
+    sound.noise(0.09, { f0: 2600, f1: 700, q: 2, vol: 0.05 })
+    const cx = P.x + P.ax * 12
+    const cy = P.y + P.ay * 12
+    let landed = false
+    for (const m of mobs) {
+      if (m.t < 0 || Math.hypot(m.x - cx, m.y - cy) > 15) continue
+      landed = true
+      m.hp--
+      m.hit = 0.18
+      const heavy = m.kind === 'skeleton' || m.kind === 'mimic' ? 0.6 : 1
+      m.kx = P.ax * 190 * heavy
+      m.ky = P.ay * 190 * heavy
+      m.next = Math.max(m.next, m.t + 0.45)
+      burst(m.x, m.y, '#ffffff', 5)
+      if (m.hp <= 0) kill(m)
+    }
+    for (const it of items) {
+      if (it.taken || Math.hypot(it.x - cx, it.y - cy) > 14) continue
+      if (it.kind === 'barrel') {
+        it.taken = true
+        landed = true
+        score += 20
+        burst(it.x, it.y, '#a8743c', 14)
+        const r = Math.random()
+        if (r < 0.5) drop('coin', it.x, it.y)
+        else if (r < 0.68) drop('torch', it.x, it.y)
+        else if (r < 0.8 && hp < maxHp) drop('potion', it.x, it.y)
+      } else if (it.kind === 'chest') {
+        landed = true
+        openChest(it)
+      } else if (it.kind === 'mimic') {
+        landed = true
+        wakeMimic(it)
+      } else if (it.kind === 'web') {
+        it.taken = true
+        burst(it.x, it.y, '#d8d8e8', 6)
+      }
+    }
+    if (landed) {
+      sound.hit()
+      shake = Math.max(shake, 0.12)
+    }
+  }
+
+  /** E: use whatever is in reach */
+  function use(now: number) {
+    let best: Item | null = null
+    for (const it of items) {
+      if (it.taken || !['chest', 'mimic', 'idol', 'brazier', 'door'].includes(it.kind)) continue
+      const d = Math.hypot(it.x - P.x, it.y - P.y)
+      if (d < 20 && (!best || d < Math.hypot(best.x - P.x, best.y - P.y))) best = it
+    }
+    if (!best) return
+    if (best.kind === 'chest') openChest(best)
+    else if (best.kind === 'mimic') wakeMimic(best)
+    else if (best.kind === 'idol') {
+      if (best.lit) say('神像已经闭上了眼')
+      else if (score < 300) say('神像要 300 分的供奉')
+      else {
+        best.lit = true
+        score -= 300
+        maxHp = Math.min(6, maxHp + 1)
+        hp = maxHp
+        sound.banish()
+        burst(best.x, best.y, '#c8f4ff', 20)
+        pop(best.x, best.y - 12, '+1 MAX', '#ff8fa3')
+        say('献上 300 分 · 生命上限 +1，伤口愈合')
+      }
+    } else if (best.kind === 'door' && !hasKey && now > hintUntil) say('门锁着 · 先找到钥匙')
   }
 
   function update(dt: number, now: number) {
@@ -291,6 +438,10 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     if (len > 0) {
       const sp = 82 * dt
       slide(P, (dx / len) * sp, (dy / len) * sp, 5)
+      if (P.atk <= 0) {
+        P.ax = dx / len
+        P.ay = dy / len
+      }
       if (Math.abs(dx) > 0.2 * len) P.face = Math.sign(dx)
       P.walk += dt
       P.stepT -= dt
@@ -300,7 +451,12 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       }
     }
     P.inv = Math.max(0, P.inv - dt)
-    fuel -= dt * (100 / 80) * (1 + (floor - 1) * 0.07)
+    P.atk = Math.max(0, P.atk - dt)
+    P.cd = Math.max(0, P.cd - dt)
+    if (wantAttack) attack()
+    if (wantUse) use(now)
+    wantAttack = wantUse = false
+    fuel = Math.max(0, fuel - dt * (100 / 100) * (1 + (floor - 1) * 0.07))
     const R = radius()
 
     // ---- items
@@ -336,26 +492,28 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
             score += 50
             sound.ignite()
             pop(it.x, it.y - 10, '+50')
-            for (const m of mobs) if (m.kind === 'skull' && Math.hypot(m.x - it.x, m.y - it.y) < 3.4 * T) {
-              m.t = -1
-              score += 200
-              burst(m.x, m.y, '#c8f4ff', 14)
-              pop(m.x, m.y - 10, '+200', '#c8f4ff')
-              sound.banish()
-            }
+            for (const m of mobs) if (m.kind === 'skull' && Math.hypot(m.x - it.x, m.y - it.y) < 3.4 * T) kill(m)
           }
           break
         case 'chest':
-          it.taken = true
-          score += 300
-          sound.win()
-          burst(it.x, it.y, '#ffd84d', 22)
-          pop(it.x, it.y - 10, '+300')
-          break
         case 'mimic':
+          if (now > hintUntil) say('挥剑或按 E 开箱', 900)
+          break
+        case 'idol':
+          if (!it.lit && now > hintUntil) say('骷髅神像 · 按 E 献上 300 分，换一颗心', 900)
+          break
+        case 'potion':
+          if (hp >= maxHp) break
           it.taken = true
-          say('是宝箱怪！')
-          bite(26, it.x, it.y)
+          hp++
+          sound.grow()
+          burst(it.x, it.y, '#ff8fa3', 10)
+          pop(it.x, it.y - 10, '+1', '#ff8fa3')
+          break
+        case 'spikes':
+          if (it.t % 2.6 > 1.5 && d < 9) bite(10, it.x, it.y + 1)
+          break
+        case 'barrel':
           break
         case 'door':
           if (hasKey) {
@@ -375,6 +533,16 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     const litBy = (x: number, y: number) => items.some((it) => it.kind === 'brazier' && it.lit && Math.hypot(it.x - x, it.y - y) < 3.2 * T)
     for (const m of mobs) {
       m.t += dt
+      m.hit = Math.max(0, m.hit - dt)
+      if (Math.abs(m.kx) + Math.abs(m.ky) > 6) {
+        if (m.kind === 'skull') {
+          m.x += m.kx * dt
+          m.y += m.ky * dt
+        } else slide(m, m.kx * dt, m.ky * dt, 4)
+        m.kx *= 0.82
+        m.ky *= 0.82
+        continue
+      }
       const ddx = P.x - m.x
       const ddy = P.y - m.y
       const d = Math.hypot(ddx, ddy) || 1
@@ -400,6 +568,27 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
         }
         const k = m.next - m.t
         if (k > 1.25) slide(m, m.vx * dt, m.vy * dt, 4)
+      } else if (m.kind === 'skeleton') {
+        // walks you down, stops to wind up, then lunges
+        if (m.t > m.next && d < 26) {
+          m.next = m.t + 1.5
+          m.vx = (ddx / d) * 130
+          m.vy = (ddy / d) * 130
+          sound.tick(220, 0.03)
+        }
+        const k = m.next - m.t
+        if (k > 1.02) {
+          /* wind-up: stand still and shake */
+        } else if (k > 0.78) slide(m, m.vx * dt, m.vy * dt, 4)
+        else if (d < Math.max(R, 4 * T) + T) slide(m, (ddx / d) * 30 * dt, (ddy / d) * 30 * dt, 4)
+      } else if (m.kind === 'mimic') {
+        // hops: a pause, then a leap
+        if (m.t > m.next) {
+          m.next = m.t + 0.75
+          m.vx = (ddx / d) * 150
+          m.vy = (ddy / d) * 150
+        }
+        if (m.next - m.t > 0.5) slide(m, m.vx * dt, m.vy * dt, 5)
       } else {
         // skulls drift through walls, but will not enter brazier light
         const sp = 24 + floor * 2
@@ -413,18 +602,15 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
         }
       }
       if (Math.abs(m.vx) > 4) m.face = Math.sign(m.vx)
-      if (d < 10) bite(m.kind === 'skull' ? 24 : m.kind === 'spider' ? 20 : 14, m.x, m.y)
+      if (d < 10 && m.hit <= 0) bite(m.kind === 'skull' ? 30 : 12, m.x, m.y)
     }
 
-    if (fuel <= 0) {
-      fuel = 0
-      alive = false
-      sound.tone(240, 1.1, { type: 'triangle', vol: 0.05, slide: 50 })
-      ui.end(score, '火把熄灭了', `走到了第 ${floor} 层 · 黑暗里的东西围了上来`, floor >= 3)
-    }
+    mobs = mobs.filter((m) => m.t >= 0)
+    if (fuel <= 0 && now > hintUntil && Math.floor(now / 4000) % 2 === 0) say('火把烧完了 · 找一支新的，或者点亮灯台', 1500)
     sound.set('fire', fuel / 100)
     ui.score(score)
-    ui.extra(`<span class="fuel${fuel < 25 ? ' low' : ''}"><i style="width:${Math.round(fuel)}%"></i></span> 第 ${floor} 层 · 钥匙 ${hasKey ? '<b>✓</b>' : '—'}`)
+    const hearts = Array.from({ length: maxHp }, (_, i) => `<i class="${i < hp ? 'on' : ''}"></i>`).join('')
+    ui.extra(`<span class="hp">${hearts}</span><span class="fuel${fuel < 25 ? ' low' : ''}"><i style="width:${Math.round(fuel)}%"></i></span> 第 ${floor} 层 · 钥匙 ${hasKey ? '<b>✓</b>' : '—'}`)
   }
 
   function render(now: number) {
@@ -470,12 +656,33 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
         const near = Math.hypot(it.x - P.x, it.y - P.y) < 2.6 * T
         const j = near && Math.sin(it.t * 2.2) > 0.86 ? Math.round(Math.sin(it.t * 50)) : 0
         ctx.drawImage(it.img, sx + j, sy)
+      } else if (it.kind === 'spikes') {
+        const up = it.t % 2.6 > 1.5
+        const warn = !up && it.t % 2.6 > 1.1
+        for (let k = 0; k < 4; k++) {
+          const hx = sx + 2 + (k % 2) * 8 + (k > 1 ? 2 : 0)
+          const hy = sy + 4 + (k > 1 ? 7 : 0)
+          ctx.fillStyle = '#15131c'
+          ctx.fillRect(hx, hy + 2, 3, 2)
+          if (up) {
+            ctx.fillStyle = '#c9c4dc'
+            ctx.fillRect(hx + 1, hy - 3, 1, 5)
+            ctx.fillStyle = '#8983a3'
+            ctx.fillRect(hx, hy, 3, 2)
+          } else if (warn) {
+            ctx.fillStyle = '#8983a3'
+            ctx.fillRect(hx + 1, hy + 1, 1, 1)
+          }
+        }
+      } else if (it.kind === 'idol') {
+        ctx.drawImage(it.img, sx, sy)
+        if (!it.lit) lights.push([it.x - ox, it.y - oy, 1.1 * T * (0.85 + 0.15 * Math.sin(t * 2))])
       } else if (it.kind === 'brazier') {
         ctx.globalAlpha = it.lit ? 1 : 0.55
         ctx.drawImage(it.img, sx, sy)
         ctx.globalAlpha = 1
         if (it.lit) lights.push([it.x - ox, it.y - oy, 3.2 * T * flick(it.x)])
-      } else ctx.drawImage(it.img, sx, sy + (it.kind === 'key' || it.kind === 'torch' ? Math.round(Math.sin(it.t * 3) * 1.5) : 0))
+      } else ctx.drawImage(it.img, sx, sy + (it.kind === 'key' || it.kind === 'torch' || it.kind === 'potion' ? Math.round(Math.sin(it.t * 3) * 1.5) : 0))
       if (it.kind === 'door') lights.push([it.x - ox, it.y - oy, (hasKey ? 2.2 : 1.3) * T * (0.9 + 0.1 * Math.sin(t * 3))])
       if (it.kind === 'key') lights.push([it.x - ox, it.y - oy, 0.9 * T * (0.8 + 0.2 * Math.sin(t * 5))])
     }
@@ -487,8 +694,15 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
         ctx.translate(sx * 2, 0)
         ctx.scale(-1, 1)
       }
-      ctx.drawImage(m.img, sx - 8, sy - 8 - (m.kind === 'rat' ? Math.floor(m.t * 10) % 2 : 0))
+      const wind = (m.kind === 'skeleton' && m.next - m.t > 1.02) || (m.kind === 'spider' && m.next - m.t > 1.9) ? Math.round(Math.sin(t * 60)) : 0
+      if (!(m.hit > 0 && Math.floor(t * 30) % 2)) ctx.drawImage(m.img, sx - 8 + wind, sy - 8 - (m.kind === 'rat' ? Math.floor(m.t * 10) % 2 : 0))
       ctx.restore()
+      if (m.hp < m.max) {
+        ctx.fillStyle = '#15131c'
+        ctx.fillRect(sx - 6, sy - 12, 12, 2)
+        ctx.fillStyle = '#ff4d6d'
+        ctx.fillRect(sx - 6, sy - 12, Math.round((12 * m.hp) / m.max), 2)
+      }
     }
     if (!(P.inv > 0 && Math.floor(t * 18) % 2) && alive) {
       const px = Math.round(P.x - ox)
@@ -501,8 +715,29 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       ctx.drawImage(IMG.hero[0], px - 8, py - 10 - (Math.floor(P.walk * 9) % 2))
       ctx.restore()
       // the torch flame in hand
-      ctx.fillStyle = Math.floor(t * 12) % 2 ? '#ffd84d' : '#ff9a3c'
-      ctx.fillRect(px + P.face * 6, py - 9 - (Math.floor(t * 9) % 2), 2, 3)
+      if (fuel > 0) {
+        ctx.fillStyle = Math.floor(t * 12) % 2 ? '#ffd84d' : '#ff9a3c'
+        ctx.fillRect(px - P.face * 7, py - 9 - (Math.floor(t * 9) % 2), 2, 3)
+      }
+      // the sword: at rest it points along the aim, a swing sweeps an arc
+      const ang = Math.atan2(P.ay, P.ax)
+      if (P.atk > 0) {
+        const k = 1 - P.atk / 0.16
+        for (let i = 0; i < 7; i++) {
+          const a = ang - 1.1 + (i / 6) * 2.2 * Math.min(1, k * 1.6)
+          const rr = 13
+          ctx.fillStyle = i > 4 * k ? '#ffffff' : '#bfe8ff'
+          ctx.fillRect(Math.round(px + Math.cos(a) * rr) - 1, Math.round(py - 2 + Math.sin(a) * rr) - 1, 2, 2)
+        }
+        const a = ang - 1.1 + 2.2 * k
+        for (let r = 5; r < 13; r += 2) {
+          ctx.fillStyle = '#e8eef8'
+          ctx.fillRect(Math.round(px + Math.cos(a) * r), Math.round(py - 2 + Math.sin(a) * r), 2, 2)
+        }
+      } else {
+        ctx.fillStyle = '#c9d4e8'
+        for (let r = 6; r < 12; r += 2) ctx.fillRect(Math.round(px + Math.cos(ang) * r), Math.round(py - 2 + Math.sin(ang) * r), 1, 1)
+      }
     }
     for (const b of bits) {
       ctx.fillStyle = b.c
@@ -554,8 +789,19 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r', ArrowUp: 'u', w: 'u', W: 'u', ArrowDown: 'd', s: 'd', S: 'd',
   }
   window.addEventListener('keydown', (e) => {
+    if (!running) return
+    if (e.key === ' ' || e.key === 'j' || e.key === 'J') {
+      e.preventDefault()
+      if (!e.repeat) wantAttack = true
+      return
+    }
+    if (e.key === 'e' || e.key === 'E' || e.key === 'f' || e.key === 'F') {
+      e.preventDefault()
+      if (!e.repeat) wantUse = true
+      return
+    }
     const k = KEYMAP[e.key]
-    if (!k || !running) return
+    if (!k) return
     e.preventDefault()
     keys.add(k)
   })
@@ -572,6 +818,16 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     pointer.on = true
     point(e)
     canvas.setPointerCapture(e.pointerId)
+    // a press swings toward where you pressed; holding keeps walking there
+    const tx = pointer.x / PX + cam.x - P.x
+    const ty = pointer.y / PX + cam.y - P.y
+    const d = Math.hypot(tx, ty)
+    if (d > 2 && running) {
+      P.ax = tx / d
+      P.ay = ty / d
+      if (Math.abs(tx) > 0.2 * d) P.face = Math.sign(tx)
+      wantAttack = true
+    }
   })
   canvas.addEventListener('pointermove', (e) => pointer.on && point(e))
   const release = () => (pointer.on = false)
@@ -583,6 +839,12 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       floor = 1
       score = 0
       fuel = 100
+      hp = maxHp = 3
+      kills = 0
+      P.ax = 1
+      P.ay = 0
+      P.atk = P.cd = 0
+      wantAttack = wantUse = false
       alive = true
       fade = 1
       fadeDir = -1
@@ -595,7 +857,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       W = 0
       last = performance.now()
       running = true
-      say('找到钥匙，再找到门 · 火把烧完之前', 3600)
+      say('空格挥剑 · E 互动 · 找到钥匙，再找到门', 3800)
     },
     stop() {
       running = false

@@ -13,9 +13,14 @@ const N = 20 // working buffer: 16×16 sprite + 2 px padding for outlines/glow
 const PAD = 2
 const SCALE = 16
 type Buf = Uint8ClampedArray
-type ToolId = 'light' | 'outline' | 'swap' | 'scale' | 'rotate' | 'juice'
+type ToolId = 'depth' | 'light' | 'outline' | 'swap' | 'scale' | 'rotate' | 'juice'
 
 const TOOLS: { id: ToolId; name: string; desc: string }[] = [
+  {
+    id: 'depth',
+    name: '色深',
+    desc: '同一张图，颜色越少越“老”。今天的像素画平均每张二十来种颜色；压到一套共用的 32 色，整批素材立刻像出自同一个游戏；16 色没有中间调，阴影只能换一种颜色来画；4 色只剩明暗；1 位只剩轮廓。打开有序抖动，用棋盘格的疏密骗出不存在的中间色。',
+  },
   {
     id: 'light',
     name: '高光',
@@ -47,6 +52,24 @@ const TOOLS: { id: ToolId; name: string; desc: string }[] = [
     desc: '点画布打它。顿帧、闪白、震屏、击退、粒子、飘字、音效，每一项都只占几帧。关掉任意一项再打几下，感受少了什么。',
   },
 ]
+
+const hex3 = (h: string): RGB => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+const DEPTHS: { key: string; note: string; palette: RGB[] | null; ramp?: boolean }[] = [
+  { key: '原色', note: '今天 · 不限色', palette: null },
+  {
+    key: '32 色',
+    note: '16 位时代的电脑 · 整个游戏共用一套调色板',
+    palette: '000000 222034 45283c 663931 8f563b df7126 d9a066 eec39a fbf236 99e550 6abe30 37946e 4b692f 524b24 323c39 3f3f74 306082 5b6ee1 639bff 5fcde4 cbdbfc ffffff 9badb7 847e87 696a6a 595652 76428a ac3232 d95763 d77bba 8f974a 8a6f30'.split(' ').map(hex3),
+  },
+  {
+    key: '16 色',
+    note: '8 位主机 / 幻想主机 · 高饱和，没有中间调',
+    palette: '000000 1d2b53 7e2553 008751 ab5236 5f574f c2c3c7 fff1e8 ff004d ffa300 ffec27 00e436 29adff 83769c ff77a8 ffccaa'.split(' ').map(hex3),
+  },
+  { key: '4 色', note: '掌机 · 只按明暗分四档', palette: '0f380f 306230 8bac0f c4d82c'.split(' ').map(hex3), ramp: true },
+  { key: '1 位', note: '早期个人电脑 · 只有黑白', palette: [[0, 0, 0], [255, 255, 255]], ramp: true },
+]
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5)
 
 const VARIANTS = [
   { name: '原版' },
@@ -121,6 +144,8 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   let raf = 0
 
   const st = {
+    depth: 2,
+    dither: false,
     lx: 4,
     ly: 3,
     lz: 7,
@@ -242,6 +267,57 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     const s = new Set<number>()
     for (let i = 0; i < b.length; i += 4) if (b[i + 3]) s.add(pack(b, i))
     return s.size
+  }
+
+  // ---- colour depth -----------------------------------------------------------------------
+  function renderDepth(): Buf {
+    const stage = DEPTHS[st.depth]
+    const pal = stage.palette
+    const o = new Uint8ClampedArray(base)
+    if (pal)
+      for (let i = 0; i < N * N; i++) {
+        const k = i * 4
+        if (!o[k + 3]) continue
+        const bay = st.dither ? BAYER4[(((i / N) | 0) % 4) * 4 + ((i % N) % 4)] : 0
+        let c: RGB
+        if (stage.ramp) {
+          const lum = (0.299 * o[k] + 0.587 * o[k + 1] + 0.114 * o[k + 2]) / 255
+          const n = pal.length
+          c = pal[Math.max(0, Math.min(n - 1, Math.floor((lum + bay / (n - 1)) * n)))]
+        } else {
+          const r = o[k] + bay * 64
+          const g = o[k + 1] + bay * 64
+          const b = o[k + 2] + bay * 64
+          let bd = Infinity
+          c = pal[0]
+          for (const q of pal) {
+            const d = 0.3 * (r - q[0]) ** 2 + 0.59 * (g - q[1]) ** 2 + 0.11 * (b - q[2]) ** 2
+            if (d < bd) {
+              bd = d
+              c = q
+            }
+          }
+        }
+        o[k] = c[0]
+        o[k + 1] = c[1]
+        o[k + 2] = c[2]
+      }
+    const used = colorCount(o)
+    stat.textContent = pal ? `${baseColors} 色 → ${used} 色 · ${stage.note}` : `${baseColors} 色 · ${stage.note}`
+    // the palette under the canvas: colours this sprite actually landed on are lit
+    const seen = new Set<number>()
+    for (let i = 0; i < o.length; i += 4) if (o[i + 3]) seen.add((o[i] << 16) | (o[i + 1] << 8) | o[i + 2])
+    const list: RGB[] = pal ?? [...seen].slice(0, 48).map((v) => [(v >> 16) & 255, (v >> 8) & 255, v & 255] as RGB)
+    extra.className = 'ws-extra ws-pal'
+    extra.replaceChildren(
+      ...list.map((c) => {
+        const i = document.createElement('i')
+        i.style.background = `rgb(${c.join(',')})`
+        if (!seen.has((c[0] << 16) | (c[1] << 8) | c[2])) i.className = 'off'
+        return i
+      }),
+    )
+    return o
   }
 
   // ---- light ---------------------------------------------------------------------------
@@ -656,10 +732,19 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     toolNav.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === id)))
     el.dataset.tool = id
     extra.replaceChildren()
+    extra.className = 'ws-extra'
     rotBig = null
     fctx.clearRect(0, 0, fxc.width, fxc.height)
     const c: HTMLElement[] = []
-    if (id === 'light') {
+    if (id === 'depth') {
+      c.push(
+        radios('depth', DEPTHS.map((d, i) => [String(i), d.key] as [string, string]), () => String(st.depth), (v) => {
+          st.depth = Number(v)
+          sound.eraJingle(st.depth)
+        }),
+      )
+      c.push(checkbox('有序抖动', () => st.dither, (v) => (st.dither = v)))
+    } else if (id === 'light') {
       c.push(checkbox('量化到色阶', () => !st.smooth, (v) => (st.smooth = !v)))
       c.push(checkbox('色相偏移（冷影暖光）', () => st.hueShift, (v) => (st.hueShift = v)))
       c.push(slider('光源高度', 2, 16, 0.5, () => st.lz, (v) => (st.lz = v)))
@@ -714,6 +799,9 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   function render() {
     const now = performance.now()
     switch (tool) {
+      case 'depth':
+        out = renderDepth()
+        break
       case 'light':
         out = renderLight()
         break
@@ -795,15 +883,18 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     if ((e.target as HTMLElement).closest('[data-tool]')) sound.tick(2000, 0.01)
   })
 
+  type TrayItem = { url: string; label: string; src: HTMLCanvasElement | ImageData }
   const tray = sprites.slice(0, 14)
-  function renderTray(extraFirst?: { url: string; label: string; src: HTMLCanvasElement | ImageData }) {
-    const items: { url: string; label: string; src: HTMLCanvasElement | ImageData }[] = tray.map((s) => ({ url: s.url, label: s.caption, src: s.data }))
-    if (extraFirst) items.unshift(extraFirst)
+  /** sprites brought in from outside the preset strip: from the star map, or the visitor's own files */
+  const customs: TrayItem[] = []
+  function renderTray() {
+    const items: TrayItem[] = [...customs, ...tray.map((s) => ({ url: s.url, label: s.caption, src: s.data }))]
     trayEl.replaceChildren(
-      ...items.map((it) => {
+      ...items.map((it, i) => {
         const b = document.createElement('button')
         b.type = 'button'
         b.title = it.label
+        if (i < customs.length) b.className = 'is-own'
         b.innerHTML = `<img src="${it.url}" alt="">`
         b.addEventListener('click', () => {
           sound.pop()
@@ -813,8 +904,133 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       }),
     )
   }
-  let carried: { url: string; label: string; src: HTMLCanvasElement | ImageData } | undefined
+  function adopt(c: HTMLCanvasElement, label: string) {
+    customs.unshift({ url: c.toDataURL(), label, src: c })
+    if (customs.length > 7) customs.pop()
+    renderTray()
+    load(c, label)
+  }
   renderTray()
+
+  // ---- bring your own image ---------------------------------------------------------------
+  const importBtn = $<HTMLButtonElement>('.ws-import')
+  const fileInput = $<HTMLInputElement>('.ws-file')
+  const importNote = $('.ws-import-note')
+  const NOTE = importNote.textContent ?? ''
+  const note = (t: string, bad = false) => {
+    importNote.textContent = t
+    importNote.classList.toggle('bad', bad)
+  }
+  /** fit any picture into 16×16: trim the empty border, then shrink (pixel art by sampling, photos by averaging) */
+  async function importImage(file: Blob, name: string) {
+    if (!file.type.startsWith('image/')) return note('这不是图片文件', true)
+    if (file.size > 24 * 1024 * 1024) return note('图片太大了（上限 24 MB）', true)
+    let bmp: ImageBitmap
+    try {
+      bmp = await createImageBitmap(file)
+    } catch {
+      return note('这张图片读不出来，换一张试试', true)
+    }
+    // very large photos are shrunk first so reading their pixels stays cheap
+    const pre = Math.min(1, 1024 / Math.max(bmp.width, bmp.height))
+    const w = Math.max(1, Math.round(bmp.width * pre))
+    const h = Math.max(1, Math.round(bmp.height * pre))
+    const full = document.createElement('canvas')
+    full.width = w
+    full.height = h
+    const fc = full.getContext('2d', { willReadFrequently: true })!
+    fc.imageSmoothingQuality = 'high'
+    fc.drawImage(bmp, 0, 0, w, h)
+    bmp.close()
+    const px = fc.getImageData(0, 0, w, h).data
+    let x0 = w, y0 = h, x1 = -1, y1 = -1
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        if (px[(y * w + x) * 4 + 3] > 24) {
+          if (x < x0) x0 = x
+          if (x > x1) x1 = x
+          if (y < y0) y0 = y
+          if (y > y1) y1 = y
+        }
+    if (x1 < 0) return note('这张图是全透明的', true)
+    const bw = x1 - x0 + 1
+    const bh = y1 - y0 + 1
+    const side = Math.max(bw, bh)
+    const c = document.createElement('canvas')
+    c.width = c.height = 16
+    const cx = c.getContext('2d')!
+    if (side <= 16) {
+      cx.drawImage(full, x0, y0, bw, bh, Math.floor((16 - bw) / 2), Math.floor((16 - bh) / 2), bw, bh)
+    } else {
+      const k = 16 / side
+      const dw = Math.max(1, Math.round(bw * k))
+      const dh = Math.max(1, Math.round(bh * k))
+      const ox = Math.floor((16 - dw) / 2)
+      const oy = Math.floor((16 - dh) / 2)
+      // an enlarged pixel drawing has few colours: sample cell centres so edges stay hard
+      const tones = new Set<number>()
+      for (let i = 0; i < px.length && tones.size <= 64; i += 4 * 37) tones.add((px[i] << 16) | (px[i + 1] << 8) | px[i + 2])
+      if (tones.size <= 64) {
+        const d = cx.createImageData(dw, dh)
+        for (let y = 0; y < dh; y++)
+          for (let x = 0; x < dw; x++) {
+            const sx = Math.min(w - 1, x0 + Math.floor(((x + 0.5) / dw) * bw))
+            const sy = Math.min(h - 1, y0 + Math.floor(((y + 0.5) / dh) * bh))
+            d.data.set(px.subarray((sy * w + sx) * 4, (sy * w + sx) * 4 + 4), (y * dw + x) * 4)
+          }
+        cx.putImageData(d, ox, oy)
+      } else {
+        // halve repeatedly: one big bilinear step would skip most source pixels
+        let cur: HTMLCanvasElement = document.createElement('canvas')
+        cur.width = bw
+        cur.height = bh
+        cur.getContext('2d')!.drawImage(full, x0, y0, bw, bh, 0, 0, bw, bh)
+        while (cur.width > dw * 2 || cur.height > dh * 2) {
+          const nx = document.createElement('canvas')
+          nx.width = Math.max(dw, Math.ceil(cur.width / 2))
+          nx.height = Math.max(dh, Math.ceil(cur.height / 2))
+          const nc = nx.getContext('2d')!
+          nc.imageSmoothingQuality = 'high'
+          nc.drawImage(cur, 0, 0, nx.width, nx.height)
+          cur = nx
+        }
+        cx.imageSmoothingQuality = 'high'
+        cx.drawImage(cur, 0, 0, cur.width, cur.height, ox, oy, dw, dh)
+      }
+    }
+    const short = name.replace(/\.[a-z0-9]+$/i, '').slice(0, 24) || '导入的图片'
+    adopt(c, `你的图片：${short}`)
+    sound.sparkle()
+    note(side > 16 ? `已从 ${bw}×${bh} 缩成 16×16 · 试试“色深”把颜色压下来` : '已载入 · 现在它也是素材了')
+    window.setTimeout(() => importNote.textContent !== NOTE && note(NOTE), 6000)
+  }
+  importBtn.addEventListener('click', () => fileInput.click())
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0]
+    if (f) importImage(f, f.name)
+    fileInput.value = ''
+  })
+  el.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer?.types.includes('Files')) return
+    e.preventDefault()
+    el.classList.add('is-drop')
+  })
+  el.addEventListener('dragleave', (e) => {
+    if (!el.contains(e.relatedTarget as Node | null)) el.classList.remove('is-drop')
+  })
+  el.addEventListener('drop', (e) => {
+    e.preventDefault()
+    el.classList.remove('is-drop')
+    const f = e.dataTransfer?.files[0]
+    if (f) importImage(f, f.name)
+  })
+  window.addEventListener('paste', (e) => {
+    if (!active) return
+    const f = [...(e.clipboardData?.files ?? [])].find((q) => q.type.startsWith('image/'))
+    if (!f) return
+    e.preventDefault()
+    importImage(f, '剪贴板')
+  })
 
   el.querySelector('.ws-export')!.addEventListener('click', () => {
     sound.click()
@@ -846,12 +1062,12 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
 
   const first = sprites.find((s) => /apple|orb/.test(s.subject)) ?? sprites[0]
   load(first.data, first.caption)
-  setTool('light')
+  setTool('depth')
 
   return {
     id: 'workshop',
     num: '03',
-    title: '工坊',
+    title: '共创工坊',
     color: '#1b1626',
     transition: 'iris',
     el,
@@ -860,9 +1076,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       c.width = c.height = 16
       if (src instanceof ImageData) c.getContext('2d')!.putImageData(src, 0, 0)
       else c.getContext('2d')!.drawImage(src, 0, 0)
-      carried = { url: c.toDataURL(), label: `来自星图：${label}`, src: c }
-      renderTray(carried)
-      load(c, carried.label)
+      adopt(c, `来自星图：${label}`)
     },
     enter() {
       active = true

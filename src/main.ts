@@ -3,7 +3,6 @@ import gsap from 'gsap'
 import { sound } from './audio'
 import { createCart } from './chapters/cart'
 import { createCthulhu } from './chapters/cthulhu'
-import { createDepth } from './chapters/depth'
 import { createDungeon } from './chapters/dungeon'
 import { createHero } from './chapters/hero'
 import { createNeon } from './chapters/neon'
@@ -18,7 +17,9 @@ import { reducedMotion } from './types'
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!
 const section = (id: string) => $<HTMLElement>(`.chapter[data-id="${id}"]`)
 
-type Area = 'hero' | 'worlds' | 'depth' | 'workshop' | 'outro'
+type Area = 'hero' | 'worlds' | 'workshop' | 'outro'
+
+if (new URLSearchParams(location.search).has('bare')) document.documentElement.classList.add('bare')
 
 async function boot() {
   const names = ['depth', 'crt', 'workshop', 'dungeon', 'ocean', 'neon', 'cthulhu'] as const
@@ -41,11 +42,10 @@ async function boot() {
     createNeon(section('neon'), strips.neon),
     createCthulhu(section('cthulhu'), strips.cthulhu),
   ]
-  const depth = createDepth(section('depth'), strips.depth)
   const outro = createOutro(section('outro'), Object.values(strips).flat(), () => {
     goTo(0).then(() => hero.focusSearch?.())
   })
-  const chapters: Chapter[] = [hero, ...worlds, depth, workshop, outro]
+  const chapters: Chapter[] = [hero, ...worlds, workshop, outro]
   const areaOf = (c: Chapter): Area => (worlds.includes(c) ? 'worlds' : (c.id as Area))
 
   const hudHint = $('.hint')
@@ -54,8 +54,8 @@ async function boot() {
   const worldList = $('.worldbar-list')
   const sndBtn = $<HTMLButtonElement>('.snd-btn')
 
-  const AREAS: Area[] = ['hero', 'worlds', 'depth', 'workshop', 'outro']
-  const AREA_NAME: Record<Area, string> = { hero: '星图', worlds: '世界', depth: '色深', workshop: '工坊', outro: '获取' }
+  const AREAS: Area[] = ['hero', 'worlds', 'workshop', 'outro']
+  const AREA_NAME: Record<Area, string> = { hero: '星图', worlds: '世界', workshop: '共创工坊', outro: '获取' }
   const nextbar = $<HTMLButtonElement>('.nextbar')
   const nextLabel = nextbar.querySelector<HTMLElement>('.nb-label')!
   const nextName = nextbar.querySelector<HTMLElement>('b')!
@@ -122,8 +122,7 @@ async function boot() {
   const HINTS: Record<Area, string> = {
     hero: '<kbd>滚轮</kbd> 缩放 <kbd>/</kbd> 搜索',
     worlds: '<kbd>滚轮</kbd><kbd>↑↓</kbd> 换世界 · 每个世界都能玩一局',
-    depth: '<kbd>←→</kbd><kbd>滚轮</kbd> 换年代 · 点画面重听',
-    workshop: '选一个工具，在画布上拖动试试',
+    workshop: '选一个工具，在画布上拖动 · 把自己的图片拖进来也行',
     outro: '<kbd>/</kbd> 回到星图搜索',
   }
 
@@ -223,7 +222,7 @@ async function boot() {
   /** the copy of a chapter steps in, line by line, each time the chapter comes on */
   function reveal(el: HTMLElement) {
     if (reducedMotion) return
-    const items = el.querySelectorAll('.world-copy > *, .depth-copy > *, .ws-head > *, .ws-tools > *, .outro-box > *, .outro-cards > *')
+    const items = el.querySelectorAll('.world-copy > *, .ws-head > *, .ws-tools > *, .outro-box > *, .outro-cards > *')
     if (!items.length) return
     gsap.fromTo(items, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.3, ease: 'steps(4)', stagger: 0.045, delay: 0.12, overwrite: true, clearProps: 'opacity,transform' })
   }

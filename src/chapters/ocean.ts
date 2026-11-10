@@ -20,7 +20,7 @@ const PAL = ['#7fdcf4', '#45b8e3', '#2b94cd', '#1f70ab', '#18548b', '#133d6b', '
 ])
 const STOPS = [0, 40, 100, 180, 300, 500, 800, 1200, 1800, 2600, 3400, 4000]
 const ZONES = [
-  { to: 200, name: '透光层', range: '0–200 m', desc: '阳光还在。焦散在水里晃，暖色依旧鲜艳——浅海关卡通常用整套游戏里最饱和的调色板。' },
+  { to: 200, name: '透光层', range: '0–200 m', desc: '阳光还在。水面的碎光、斜射的光柱、晃动的焦散都挤在这 200 米里，暖色依旧鲜艳——浅海关卡通常用整套游戏里最饱和的调色板。把鼠标伸进鱼群试试。' },
   { to: 1000, name: '暮光层', range: '200–1000 m', desc: '水先吃掉红色，再吃掉黄色。同一条鱼往下游，颜色会自己变冷、变暗——画面里的“环境色”就是这么来的。' },
   { to: 3000, name: '午夜层', range: '1000–3000 m', desc: '阳光到不了这里。能看见的只有自己会发光的生物：画深海，其实是在画光点。' },
   { to: 4001, name: '深渊', range: '3000–4000 m', desc: '完全的黑。点击画面发出声呐——在没有光的地方，轮廓是唯一的信息。' },
@@ -74,7 +74,7 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
         ...o,
       }),
     )
-  add(by(/tang|clownfish|puffer|seahorse|sea turtle|reef shark/), 20, 170)
+  add(by(/tang|clownfish|puffer|seahorse|sea turtle|reef shark/), 14, 176)
   by(/coral|seaweed|starfish|hermit|clam|pearl|urchin/).forEach((spr, i) =>
     creatures.push({ spr, x: 0.02 + (i / 24) * 0.4, depth: 186 - Math.random() * 4, scale: 1, speed: 0, dir: 1, phase: i, glow: null, layer: 1, revealUntil: 0 }),
   )
@@ -93,6 +93,8 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
   let bubbles: { x: number; y: number; r: number; v: number }[] = []
   const pings: { x: number; y: number; t0: number }[] = []
 
+  const SUN_P = 0.3
+  const school = Array.from({ length: 54 }, () => ({ ox: (Math.random() - 0.5) * 0.2 + (Math.random() - 0.5) * 0.1, oy: (Math.random() - 0.5) * 36, x: -1, y: -1, vx: 0, vy: 0 }))
   let progress = 0
   let shown = 0
   let mx = 0.5
@@ -228,7 +230,8 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
       }
     }
     game.fish = game.fish.filter((f) => f.x > -f.size * 2 && f.x < w + f.size * 2)
-    progress = Math.min(1, (gameDepth() - 60) / (MAX_D - 180))
+    const gd = gameDepth()
+    progress = Math.max(0, Math.min(1, gd < 200 ? ((gd - 38) / 162) * SUN_P : SUN_P + ((gd - 200) / (MAX_D - 320)) * (1 - SUN_P)))
     shell.extra(`体长 ${Math.round(game.size)} 像素 · 深度 ${Math.round(cam).toLocaleString('en-US')} m`)
   }
 
@@ -276,14 +279,19 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
     const b = buf!
     const t = now / 1000
     shown += (progress - shown) * 0.12
-    const cam = 60 + shown * (MAX_D - 60 - 120)
-    const ppm = h / 360
+    // the first third of the dive stays in the sunlit zone, zoomed in; below it the view widens
+    const cam = shown < SUN_P ? 38 + (shown / SUN_P) * 162 : 200 + ((shown - SUN_P) / (1 - SUN_P)) * (MAX_D - 200 - 120)
+    const wide = Math.max(0, Math.min(1, (cam - 110) / 420))
+    const viewM = game.on ? 360 : 140 + 220 * wide * wide * (3 - 2 * wide)
+    const ppm = h / viewM
     const rowD = (y: number) => cam + (y - h / 2) / ppm
 
     // ---- water
     for (let y = 0; y < h; y++) {
       const d = rowD(y)
       const u = depthU(Math.max(0, d))
+      const air = d < 4
+      const shallow = d < 34 ? 1 - Math.max(0, d) / 34 : 0
       const caus = d < 140 ? (1 - d / 140) * (1 - d / 140) : 0
       const rays = d < 320 ? 1 - d / 320 : 0
       const floor = d > MAX_D - 8
@@ -294,9 +302,38 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
         let r = p[0]
         let g = p[1]
         let bl = p[2]
+        if (air) {
+          // the surface: a rolling waterline, foam on top, sky above
+          const ds = d + Math.sin(x * 0.07 + t * 1.3) * 1.6 + Math.sin(x * 0.023 - t * 0.8) * 1.2
+          if (ds < 0) {
+            const k = Math.min(1, -ds / 40)
+            const band = Math.floor(k * 4 + bay) / 4
+            const sun = Math.hypot(x - w * 0.72, (ds + 26) * ppm)
+            if (sun < 7) b[y * w + x] = pack(255, 244, 196)
+            else if (sun < 11 && bay > 0.4) b[y * w + x] = pack(255, 232, 170)
+            else b[y * w + x] = pack(176 - band * 60, 226 - band * 34, 250 - band * 8)
+            continue
+          }
+          if (ds < 1.3) {
+            b[y * w + x] = pack(240, 252, 255)
+            continue
+          }
+        }
+        if (shallow > 0) {
+          r += 26 * shallow
+          g += 30 * shallow
+          bl += 22 * shallow
+          // glints dancing just under the surface
+          const gl = Math.sin(x * 0.31 + t * 2.1 + Math.sin(y * 0.4 + t) * 2) * Math.sin(x * 0.07 - t * 1.2)
+          if (d > 1 && d < 22 && gl > 0.86 - bay * 0.1) {
+            r += 70
+            g += 70
+            bl += 50
+          }
+        }
         if (rays > 0) {
           const v = Math.sin((x + y * 0.55) * 0.045 + t * 0.25) + Math.sin((x - y * 0.2) * 0.021 - t * 0.17)
-          if (v > 1.45 - bay * 0.3) {
+          if (v > 1.3 - bay * 0.3) {
             r += 30 * rays
             g += 34 * rays
             bl += 30 * rays
@@ -332,7 +369,7 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
       const a = 80 * Math.exp(-d / 900) + 10
       b[y * w + x] = pack(a + 8, a + 14, a + 22)
     }
-    if (!reducedMotion && Math.random() < 0.15 * Math.exp(-cam / 1200)) bubbles.push({ x: Math.random() * w, y: h + 2, r: Math.random() < 0.3 ? 2 : 1, v: 0.2 + Math.random() * 0.4 })
+    if (!reducedMotion && Math.random() < (0.15 + (cam < 200 ? 0.2 : 0)) * Math.exp(-cam / 1200)) bubbles.push({ x: Math.random() * w, y: h + 2, r: Math.random() < 0.3 ? 2 : 1, v: 0.2 + Math.random() * 0.4 })
     bubbles = bubbles.filter((q) => q.y > -4)
     for (const q of bubbles) {
       q.y -= q.v
@@ -349,6 +386,48 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
           const yy = cy + dy
           if (xx >= 0 && yy >= 0 && xx < w && yy < h) b[yy * w + xx] = pack(l, l + 10, l + 20)
         }
+    }
+
+    // ---- a school of silversides in the sunlit zone: it parts around the pointer
+    if (!game.on && cam < 330) {
+      const px = mx * w
+      const py = my * h
+      const sc = [0.5 + 0.3 * Math.sin(t * 0.13), 86 + 44 * Math.sin(t * 0.21 + 1)]
+      for (const f of school) {
+        const tx = (sc[0] + f.ox) * w
+        const ty = h / 2 + (sc[1] + f.oy - cam) * ppm
+        if (f.x === -1) {
+          f.x = tx
+          f.y = ty
+        }
+        f.vx += (tx - f.x) * 0.004
+        f.vy += (ty - f.y) * 0.004
+        const dx = f.x - px
+        const dy = f.y - py
+        const dd = dx * dx + dy * dy
+        if (dd < 34 * 34 && dd > 0.01) {
+          const k = (1 - Math.sqrt(dd) / 34) * 1.1
+          f.vx += (dx / Math.sqrt(dd)) * k
+          f.vy += (dy / Math.sqrt(dd)) * k
+        }
+        f.vx *= 0.9
+        f.vy *= 0.9
+        if (!reducedMotion) {
+          f.x += f.vx + Math.sin(t * 2 + f.ox * 40) * 0.12
+          f.y += f.vy
+        }
+        const xx = Math.round(f.x)
+        const yy = Math.round(f.y)
+        if (xx < 2 || yy < 0 || xx >= w - 2 || yy >= h) continue
+        const dW = rowD(yy)
+        if (dW < 3) continue
+        const l = Math.exp(-dW / 260)
+        const head = f.vx >= 0 ? 1 : -1
+        const flash = Math.sin(t * 6 + f.ox * 90) > 0.6 ? 40 : 0
+        b[yy * w + xx] = pack(150 * l + 60 + flash, 190 * l + 50 + flash, 200 * l + 50 + flash)
+        b[yy * w + xx + head] = pack(210 * l + 40, 232 * l + 20, 240 * l + 14)
+        b[yy * w + xx - head] = pack(70 * l + 20, 110 * l + 30, 150 * l + 30)
+      }
     }
 
     // ---- creatures
@@ -422,6 +501,15 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
       const sx = Math.round(c.x * w + (mx - 0.5) * c.layer * -14 - size / 2)
       const sy = Math.round(h / 2 + (c.depth - cam) * ppm + bob + (my - 0.5) * c.layer * -6 - size / 2)
       if (sy > h || sy + size < 0) continue
+      // reef fish are shy: they turn and dart away from the pointer
+      if (c.speed && c.depth < 200 && !reducedMotion) {
+        const ddx = sx + size / 2 - mx * w
+        const ddy = sy + size / 2 - my * h
+        if (ddx * ddx + ddy * ddy < 30 * 30) {
+          c.dir = ddx >= 0 ? 1 : -1
+          c.x += c.dir * 0.004
+        }
+      }
       blit(c.spr, sx, sy, size, mirror(c.spr, c.dir), c.depth, c.glow, c.phase, Math.max(0, (c.revealUntil - now) / 1400))
     }
     // additive glow halos, quantised into rings
@@ -497,7 +585,8 @@ export function createOcean(el: HTMLElement, sprites: Sprite[]): Chapter {
     consume(delta) {
       if (delta > 0 && progress >= 1) return false
       if (delta < 0 && progress <= 0) return false
-      progress = Math.min(1, Math.max(0, progress + delta / 3200))
+      // slower than the wheel wants: the sunlit zone alone takes a few good scrolls
+      progress = Math.min(1, Math.max(0, progress + delta / 6400))
       return true
     },
     enter(dir) {

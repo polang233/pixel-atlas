@@ -58,8 +58,40 @@ uniform float uM2;
 uniform float uGrid;
 uniform float uCellGrid;
 uniform float uShade;
+uniform float uStyle;
+uniform float uBlock;
 uniform vec2 uN;   // tiles per side for l1, l2
 out vec4 o;
+
+uniform float uMap;      // 0 = one planet, 1 = continents pushed apart into a world map
+uniform vec4 uSec[7];    // per colour continent: mid angle, half width, offset x, offset y
+uniform float uRc;       // radius of the grey core island
+float wobA(float r) { return 0.075 * sin(r * 0.027) + 0.04 * sin(r * 0.011 + 2.0); }
+float wobR(float a) { return uR * (0.045 * sin(a * 5.0) + 0.022 * sin(a * 11.0 + 1.0) + 0.012 * sin(a * 23.0)); }
+// signed distance in cells from disc point p (relative to the centre) to piece k; <= 0 is inside
+float pieceDist(vec2 p, int k) {
+  float r = length(p);
+  float a = atan(p.y, p.x);
+  float rc = uRc + wobR(a);
+  if (k == 0) return r - rc;
+  vec4 sc = uSec[k - 1];
+  float da = mod(a + wobA(r) - sc.x + 3.14159265, 6.2831853) - 3.14159265;
+  return max(max((abs(da) - sc.y) * r, r - uR), rc - r);
+}
+// which piece a map point falls on (-1 = sea); w = the disc point it shows
+int locate(vec2 m, vec2 D, out vec2 w, out float dist) {
+  dist = 1e9;
+  int hit = -1;
+  w = m;
+  for (int k = 0; k < 8; k++) {
+    vec2 off = k == 0 ? vec2(0.0) : uSec[k - 1].zw * uMap;
+    vec2 p = m - D - off;
+    float d = pieceDist(p, k);
+    if (d <= 0.0 && hit < 0) { hit = k; w = p + D; }
+    dist = min(dist, d);
+  }
+  return hit;
+}
 
 float hash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -82,13 +114,37 @@ vec4 lvl(usampler2D pt, sampler2DArray arr, float cpt, float n, vec2 w, vec2 gx,
   return textureGrad(arr, vec3(uv, float(layer - 1u)), gx / cpt, gy / cpt);
 }
 
+const vec3 PICO[16] = vec3[16](
+  vec3(0.0), vec3(0.114, 0.169, 0.325), vec3(0.494, 0.145, 0.325), vec3(0.0, 0.529, 0.318),
+  vec3(0.671, 0.322, 0.212), vec3(0.373, 0.341, 0.310), vec3(0.761, 0.765, 0.780), vec3(1.0, 0.945, 0.910),
+  vec3(1.0, 0.0, 0.302), vec3(1.0, 0.639, 0.0), vec3(1.0, 0.925, 0.153), vec3(0.0, 0.894, 0.212),
+  vec3(0.161, 0.678, 1.0), vec3(0.514, 0.463, 0.612), vec3(1.0, 0.467, 0.659), vec3(1.0, 0.8, 0.667));
+vec3 nearest16(vec3 c) {
+  vec3 best = PICO[0];
+  float bd = 9.0;
+  for (int i = 0; i < 16; i++) {
+    vec3 d = c - PICO[i];
+    float dd = dot(d * d, vec3(0.3, 0.59, 0.11));
+    if (dd < bd) { bd = dd; best = PICO[i]; }
+  }
+  return best;
+}
+
 void main() {
   vec2 f = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
-  vec2 d = (f - uRes * 0.5) / uZoom;
+  // the map is drawn in chunky screen blocks while it is far away; uBlock falls to 1 as you fly in
+  float MB = uMap > 0.001 && uStyle < 0.5 ? max(uBlock, 1.0) : 1.0;
+  vec2 mcell = floor(f / MB);
+  vec2 fm = MB > 1.0 ? (mcell + 0.5) * MB : f;
+  vec2 d = (fm - uRes * 0.5) / uZoom;
   float c = cos(uAngle), s = sin(uAngle);
-  vec2 w = uW + vec2(c * d.x - s * d.y, s * d.x + c * d.y);
-  vec2 gx = dFdx(w), gy = dFdy(w);
+  vec2 m = uW + vec2(c * d.x - s * d.y, s * d.x + c * d.y);
+  vec2 gx = vec2(c, s) / uZoom * MB, gy = vec2(-s, c) / uZoom * MB;
   vec2 D = vec2(uSide * 0.5);
+  vec2 w = m;
+  float cdist = length(m - D) - uR;
+  bool land = cdist <= 0.0;
+  if (uMap > 0.001) land = locate(m, D, w, cdist) >= 0;
   vec2 rel = w - D;
   float r = length(rel);
 
@@ -97,30 +153,154 @@ void main() {
   float st = step(0.9982, hash(sp)) * (0.45 + 0.55 * sin(uTime * 1.7 + hash(sp + 7.0) * 40.0));
   vec3 bg = vec3(0.027, 0.024, 0.047) + st * vec3(0.75, 0.78, 1.0);
 
-  // LOD0 — overview stores rgb=0 outside the disc, so its mips are premultiplied
-  vec4 ov = textureGrad(uOv, w / uSide, gx / uSide, gy / uSide);
+  // far view. uStyle > 0 snaps it to chunky screen blocks so the planet reads as pixel art
+  float B = max(uBlock, 1.0);
+  bool px = uStyle > 0.5;
+  vec2 cellp = px ? floor(f / B) : floor(f / 2.0);
+  vec2 fw = w; vec2 frel = rel; float fr = r;
+  vec4 ov;
+  if (px) {
+    vec2 dq = ((cellp + 0.5) * B - uRes * 0.5) / uZoom;
+    fw = uW + vec2(c * dq.x - s * dq.y, s * dq.x + c * dq.y);
+    frel = fw - D; fr = length(frel);
+    ov = textureLod(uOv, fw / uSide, log2(max(B / uZoom, 1.0)));
+    ov = fr < uR ? vec4(ov.rgb / max(ov.a, 0.2), 1.0) : vec4(0.0);
+  } else {
+    // overview stores rgb=0 outside the disc, so its mips are premultiplied
+    ov = textureGrad(uOv, w / uSide, gx / uSide, gy / uSide);
+    if (!land) ov = vec4(0.0);
+  }
   vec3 far = bg * (1.0 - ov.a) + ov.rgb;
+  float step1 = B / uZoom;  // one block in world units
 
-  // pixel-art sphere shading on the far view: lambert, quantised with Bayer dither
-  if (uShade > 0.0 && r < uR) {
-    vec2 q = vec2(c * rel.x + s * rel.y, -s * rel.x + c * rel.y) / uR;  // screen-space offset
+  float sph = uShade * (1.0 - uMap);
+  if (sph > 0.0 && fr < uR && land) {
+    vec2 q = vec2(c * frel.x + s * frel.y, -s * frel.x + c * frel.y) / uR;  // screen-space offset
     vec3 nrm = vec3(q, sqrt(max(0.0, 1.0 - dot(q, q))));
     float lam = clamp(dot(nrm, normalize(vec3(-0.55, -0.6, 0.75))), 0.0, 1.0);
-    float lv = floor(lam * 5.0 + bayer4(floor(f / 2.0))) / 5.0;
-    far *= mix(1.0, 0.42 + 0.78 * lv, uShade * 0.75);
+    float lv;
+    if (uStyle > 7.5) {
+      lv = 0.75;  // sticker: no shading at all
+    } else if (uStyle > 4.5 && uStyle < 5.5) {
+      lv = lam < 0.3 ? 0.2 : (lam < 0.62 ? 0.62 : 1.0);
+    } else if (uStyle > 2.5 && uStyle < 3.5) {
+      // cel: three flat tones and a hard highlight
+      lv = lam < 0.22 ? 0.12 : (lam < 0.55 ? 0.55 : 1.0);
+    } else if (px) {
+      lv = floor(lam * 4.0 + bayer4(cellp)) / 4.0;
+    } else {
+      lv = floor(lam * 5.0 + bayer4(cellp)) / 5.0;
+    }
+    far *= mix(1.0, 0.42 + 0.78 * lv, sph * 0.75);
     float lum = dot(far, vec3(0.299, 0.587, 0.114));
-    far = max(vec3(0.0), mix(vec3(lum), far, 1.0 + 0.35 * uShade));
+    far = max(vec3(0.0), mix(vec3(lum), far, 1.0 + 0.35 * sph));
+    if (uStyle > 0.5 && uStyle < 1.5) far = floor(far * 7.0 + 0.5) / 7.0;
+    if (uStyle > 1.5 && uStyle < 2.5) far = floor(far * 1.25 * 3.0 + bayer4(cellp)) / 3.0;
+    if (uStyle > 2.5 && uStyle < 3.5) {
+      far = floor(far * 5.0 + 0.5) / 5.0;
+      if (lam > 0.965) far += vec3(0.28);
+    }
+    if (uStyle > 4.5 && uStyle < 5.5) {
+      // one 56-pixel sprite in a fixed 16-colour palette
+      far = nearest16(clamp(far * 1.25 + (bayer4(cellp) - 0.5) * 0.12, 0.0, 1.0));
+      if (fr > uR - step1 * 1.1) far = PICO[1] * 0.6;
+    }
+    if (uStyle > 5.5 && uStyle < 6.5) {
+      // tiles: every block gets a lit top-left edge and a shaded bottom-right one
+      far = floor(far * 1.15 * 6.0 + 0.5) / 6.0;
+      vec2 ip = fract(f / B) * B;
+      if (ip.x < 1.0 || ip.y < 1.0) far = far * 1.35 + 0.05;
+      else if (ip.x > B - 1.0 || ip.y > B - 1.0) far *= 0.5;
+    }
+    if (uStyle > 6.5 && uStyle < 7.5) {
+      // 1-bit: brightness becomes dot density, hue is the only colour left
+      float l1 = dot(far, vec3(0.299, 0.587, 0.114));
+      float mx = max(far.r, max(far.g, far.b));
+      vec3 ink = mx > 0.02 ? far / mx : vec3(1.0);
+      far = step(bayer4(cellp), l1 * 1.7) > 0.5 ? mix(vec3(1.0), ink, 0.8) : vec3(0.04, 0.035, 0.09);
+    }
+    if (uStyle > 7.5) {
+      far = floor(far * 1.2 * 5.0 + 0.5) / 5.0;
+      if (fr > uR - step1 * 2.0) far = vec3(0.96, 0.93, 0.85);
+    }
+    // sprite outline: one dark block around the silhouette
+    if (px && uStyle < 3.5 && fr > uR - step1 * 1.2) far *= 0.22;
   }
-  // atmosphere: the rim colour bleeds out into space
-  if (r > uR * 0.985) {
-    vec3 rim = textureLod(uOv, (D + rel / r * uR * 0.94) / uSide, 4.0).rgb;
-    float k = exp(-max(r - uR, 0.0) / (uR * 0.07)) * smoothstep(uR * 0.985, uR * 1.004, r);
-    float band = floor(k * 6.0 + bayer4(floor(f / 3.0)) * 0.9) / 6.0;
-    far += rim * band * 0.75;
+  if (!px) {
+    // atmosphere: the rim colour bleeds out into space
+    if (r > uR * 0.985 && uMap < 0.999) {
+      vec3 rim = textureLod(uOv, (D + rel / r * uR * 0.94) / uSide, 4.0).rgb * (1.0 - uMap) * (1.0 - uMap);
+      float k = exp(-max(r - uR, 0.0) / (uR * 0.07)) * smoothstep(uR * 0.985, uR * 1.004, r);
+      float band = floor(k * 6.0 + bayer4(floor(f / 3.0)) * 0.9) / 6.0;
+      far += rim * band * 0.75;
+    }
+  } else if (fr >= uR) {
+    vec4 rs = textureLod(uOv, (D + frel / fr * uR * 0.9) / uSide, 5.0);
+    vec3 rim = rs.rgb / max(rs.a, 0.2);
+    float n = (fr - uR) / step1;  // blocks away from the edge
+    if (uStyle < 1.5) {
+      // two hard halo steps, the outer one checkered
+      if (n < 2.0) far += rim * 0.34 * uShade;
+      else if (n < 5.0 && mod(cellp.x + cellp.y, 2.0) < 0.5) far += rim * 0.22 * uShade;
+    } else if (uStyle < 2.5) {
+      float k = exp(-n / 5.0);
+      far += rim * step(bayer4(cellp), k * 0.9) * 0.5 * uShade;
+    } else if (uStyle < 3.5) {
+      // no glow: loose pixels drifting off the rim
+      float k = exp(-n / 7.0);
+      far += rim * step(1.0 - k * 0.28, hash(cellp)) * 0.9 * uShade;
+    } else if (uStyle < 4.5) {
+      float k = exp(-n / 4.0);
+      far += rim * floor(k * 3.0 + 0.3) / 3.0 * 0.4 * uShade;
+    } else if (uStyle > 7.5) {
+      // sticker: a hard drop shadow, down and to the right
+      if (length(frel - vec2(c * 2.0 - s * 2.0, s * 2.0 + c * 2.0) * step1) < uR) far = vec3(0.0);
+    }
+  }
+  if (uStyle > 3.5 && uStyle < 4.5) {
+    // LED matrix: every block is a lamp with a dark gap
+    vec2 lp = abs(fract(f / B) - 0.5);
+    float lamp = step(max(lp.x, lp.y), 0.36);
+    far = mix(far * 0.1 + vec3(0.012), far * 1.2, lamp);
+  }
+
+  if (uMap > 0.001 && uStyle < 0.5) {
+    float st = MB / uZoom;  // one block in cells
+    if (land) {
+      // far away the land is flat terrain colour in stepped bands; the real cells take over as you approach
+      vec4 sm = textureLod(uOv, w / uSide, clamp(log2(max(st, 1.0)) + 2.5 * uShade, 0.0, 6.0));
+      vec3 base = sm.rgb / max(sm.a, 0.4);
+      float lumb = dot(base, vec3(0.299, 0.587, 0.114));
+      base = mix(vec3(lumb), base, 1.75) * 1.28;
+      base = floor(clamp(base, 0.0, 1.0) * 8.0 + 0.5) / 8.0;
+      float t = floor(clamp(-cdist / (uR * 0.06), 0.0, 3.0));
+      base *= 0.84 + 0.1 * t;
+      if (cdist > -st * 1.1) base = vec3(0.04, 0.05, 0.13);
+      far = mix(far, base, uMap * uShade);
+    } else {
+      // beaches of uneven width give the cut pieces capes and bays; a few sand islets dot the open sea
+      float cape = 0.5 + 0.5 * sin(m.x * 0.009 + sin(m.y * 0.007) * 2.2);
+      float bw = uR * (0.018 + 0.1 * cape * cape) * uMap;
+      float isl = sin(m.x * 0.013 + 1.7) * sin(m.y * 0.016 + 0.4) + 0.5 * sin((m.x + m.y) * 0.031);
+      vec3 sea;
+      if (cdist < bw) {
+        sea = cdist > bw - st * 1.1 ? vec3(0.72, 0.62, 0.40) : (cdist < bw * 0.45 && cape > 0.6 ? vec3(0.62, 0.74, 0.42) : vec3(0.90, 0.81, 0.56));
+      } else if (cdist > bw + uR * 0.12 && isl > 1.3 && uMap > 0.9) {
+        sea = isl > 1.37 ? vec3(0.45, 0.68, 0.40) : vec3(0.90, 0.81, 0.56);
+      } else {
+        float dd = (cdist - bw) / (uR * 0.028);
+        sea = mix(vec3(0.20, 0.50, 0.70), vec3(0.055, 0.13, 0.30), min(1.0, floor(dd) / 4.0));
+        float tick = floor(uTime * 2.2);
+        if (dd < 1.0 && mod(mcell.x + mcell.y + tick, 5.0) < 2.0) sea = vec3(0.91, 0.96, 1.0);
+        else if (dd > 3.0 && hash(vec2(floor(mcell.x / 2.0), mcell.y)) > 0.975 && mod(mcell.x + tick, 7.0) < 3.0) sea *= 1.5;
+        if (mod(mcell.x + mcell.y, 2.0) < 1.0) sea *= 0.94;
+      }
+      far = mix(far, sea, uMap);
+    }
   }
 
   vec3 col = far;
-  if (uM1 > 0.0) {
+  if (uM1 > 0.0 && land) {
     ivec2 ci = ivec2(floor(w));
     vec4 cell = (ci.x >= 0 && ci.y >= 0 && ci.x < int(uSide) && ci.y < int(uSide)) ? texelFetch(uOv, ci, 0) : vec4(0.0);
     vec3 tint = bg * (1.0 - cell.a * 0.4) + cell.rgb * 0.16;
@@ -133,13 +313,13 @@ void main() {
     vec3 det = tint * (1.0 - spr.a) + spr.rgb;
     col = mix(far, det, uM1);
   }
-  if (uCellGrid > 0.0) {
+  if (uCellGrid > 0.0 && land) {
     vec2 fc = fract(w);
     float px = 1.0 / uZoom;
     float l = max(step(fc.x, px), step(fc.y, px));
     col = mix(col, col * 0.35, l * uCellGrid);
   }
-  if (uGrid > 0.0) {
+  if (uGrid > 0.0 && land) {
     vec2 fp = fract(w * 16.0);
     float px = 16.0 / uZoom;
     float l = max(step(fp.x, px), step(fp.y, px));
@@ -151,11 +331,48 @@ void main() {
   o = vec4(col, 1.0);
 }`
 
+// far-view look: 0 smooth, 1 mosaic, 2 dither, 3 cel, 4 LED. `?ring=n` previews one.
+const RING_BLOCKS = [1, 6, 4, 5, 8, -56, 12, 3, 6]
+const ringParam = Number(new URLSearchParams(location.search).get('ring') ?? 0)
+const RING = { style: ringParam >= 0 && ringParam <= 8 ? Math.floor(ringParam) : 0, block: 1 }
+RING.block = RING_BLOCKS[RING.style]
+
 const HIT_VERT = `#version 300 es
 uniform vec2 uRes;
 uniform vec2 uW;
 uniform float uZoom;
 uniform float uAngle;
+uniform float uR;
+uniform float uSide;
+uniform float uMap;      // 0 = one planet, 1 = continents pushed apart into a world map
+uniform vec4 uSec[7];    // per colour continent: mid angle, half width, offset x, offset y
+uniform float uRc;       // radius of the grey core island
+float wobA(float r) { return 0.075 * sin(r * 0.027) + 0.04 * sin(r * 0.011 + 2.0); }
+float wobR(float a) { return uR * (0.045 * sin(a * 5.0) + 0.022 * sin(a * 11.0 + 1.0) + 0.012 * sin(a * 23.0)); }
+// signed distance in cells from disc point p (relative to the centre) to piece k; <= 0 is inside
+float pieceDist(vec2 p, int k) {
+  float r = length(p);
+  float a = atan(p.y, p.x);
+  float rc = uRc + wobR(a);
+  if (k == 0) return r - rc;
+  vec4 sc = uSec[k - 1];
+  float da = mod(a + wobA(r) - sc.x + 3.14159265, 6.2831853) - 3.14159265;
+  return max(max((abs(da) - sc.y) * r, r - uR), rc - r);
+}
+// which piece a map point falls on (-1 = sea); w = the disc point it shows
+int locate(vec2 m, vec2 D, out vec2 w, out float dist) {
+  dist = 1e9;
+  int hit = -1;
+  w = m;
+  for (int k = 0; k < 8; k++) {
+    vec2 off = k == 0 ? vec2(0.0) : uSec[k - 1].zw * uMap;
+    vec2 p = m - D - off;
+    float d = pieceDist(p, k);
+    if (d <= 0.0 && hit < 0) { hit = k; w = p + D; }
+    dist = min(dist, d);
+  }
+  return hit;
+}
 in vec2 aCorner;
 in vec2 aCell;
 out vec2 vUv;
@@ -163,6 +380,10 @@ out float vPhase;
 void main() {
   float size = max(1.0, 3.0 / uZoom) * (uZoom > 10.0 ? 1.2 : 1.0);
   vec2 w = aCell + 0.5 + (aCorner - 0.5) * size;
+  if (uMap > 0.001) {
+    vec2 pc = aCell + 0.5 - vec2(uSide * 0.5);
+    for (int k = 1; k < 8; k++) if (pieceDist(pc, k) <= 0.0) { w += uSec[k - 1].zw * uMap; break; }
+  }
   vec2 d = w - uW;
   float c = cos(uAngle), s = sin(uAngle);
   vec2 sp = vec2(c * d.x + s * d.y, -s * d.x + c * d.y) * uZoom + uRes * 0.5;
@@ -450,45 +671,131 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   gl.uniform1f(U('uR'), R)
   gl.uniform2f(U('uN'), meta.l1.tiles, meta.l2.tiles)
   const u = Object.fromEntries(
-    ['uRes', 'uW', 'uZoom', 'uAngle', 'uTime', 'uDim', 'uM1', 'uM2', 'uGrid', 'uCellGrid', 'uShade'].map((n) => [n, U(n)]),
+    ['uRes', 'uW', 'uZoom', 'uAngle', 'uTime', 'uDim', 'uM1', 'uM2', 'uGrid', 'uCellGrid', 'uShade', 'uStyle', 'uBlock', 'uMap', 'uRc'].map((n) => [n, U(n)]),
   )
   gl.useProgram(hitProg)
   const H = (n: string) => gl.getUniformLocation(hitProg, n)
-  const hu = Object.fromEntries(['uRes', 'uW', 'uZoom', 'uAngle', 'uTime'].map((n) => [n, H(n)]))
+  const hu = Object.fromEntries(['uRes', 'uW', 'uZoom', 'uAngle', 'uTime', 'uMap', 'uRc'].map((n) => [n, H(n)]))
+  gl.uniform1f(H('uR'), R)
+  gl.uniform1f(H('uSide'), SIDE)
+
+  // ---- the world map: the same disc, cut along its hue borders and pushed apart ------------
+  // angles are measured on the disc (y down); the cuts sit where the dominant hue changes
+  const DEG = Math.PI / 180
+  const RC = R * 0.62
+  const LANDS = [
+    { name: '灰烬之心', note: '灰与黑白', a0: 0, a1: 0, push: 0 },
+    { name: '赤焰群岛', note: '红', a0: 330, a1: 400, push: 0.5 },
+    { name: '赤陶荒原', note: '红棕', a0: 40, a1: 130, push: 0.44 },
+    { name: '琥珀荒原', note: '橙', a0: 130, a1: 205, push: 0.47 },
+    { name: '金穗平原', note: '黄', a0: 205, a1: 232, push: 0.6 },
+    { name: '翡翠森林', note: '绿与青', a0: 232, a1: 258, push: 0.5 },
+    { name: '蓝晶冻原', note: '蓝', a0: 258, a1: 312, push: 0.46 },
+    { name: '紫雾沼泽', note: '紫与粉', a0: 312, a1: 330, push: 0.62 },
+  ].map((l, k) => {
+    const mid = ((l.a0 + l.a1) / 2) * DEG
+    const half = ((l.a1 - l.a0) / 2) * DEG
+    return { ...l, k, mid, half, ox: k ? Math.cos(mid) * R * l.push : 0, oy: k ? Math.sin(mid) * R * l.push : 0 }
+  })
+  const secData = new Float32Array(28)
+  LANDS.slice(1).forEach((l, i) => secData.set([l.mid, l.half, l.ox, l.oy], i * 4))
+  for (const pr of [prog, hitProg]) {
+    gl.useProgram(pr)
+    gl.uniform4fv(gl.getUniformLocation(pr, 'uSec'), secData)
+    gl.uniform1f(gl.getUniformLocation(pr, 'uRc'), RC)
+  }
+  /** how far the continents are pushed apart right now: 0 planet, 1 map */
+  let mapE = 0
+  let homed = false
+  const MAP_ON = RING.style === 0
+  const wobA = (r: number) => 0.075 * Math.sin(r * 0.027) + 0.04 * Math.sin(r * 0.011 + 2.0)
+  const wobR = (a: number) => R * (0.045 * Math.sin(a * 5.0) + 0.022 * Math.sin(a * 11.0 + 1.0) + 0.012 * Math.sin(a * 23.0))
+  // mirrors pieceDist() in the shader
+  function pieceDist(px: number, py: number, k: number) {
+    const r = Math.hypot(px, py)
+    const a = Math.atan2(py, px)
+    const rc = RC + wobR(a)
+    if (k === 0) return r - rc
+    const l = LANDS[k]
+    const da = ((((a + wobA(r) - l.mid + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI
+    return Math.max((Math.abs(da) - l.half) * r, r - R, rc - r)
+  }
+  /** the piece a disc point belongs to (-1 outside the disc) */
+  function pieceOf(wx: number, wy: number) {
+    for (let k = 0; k < 8; k++) if (pieceDist(wx - D, wy - D, k) <= 0) return k
+    return -1
+  }
+  /** map point → disc point, or null over the sea */
+  function discOf(mx: number, my: number, e = mapE): [number, number] | null {
+    if (e < 0.001) return [mx, my]
+    for (let k = 0; k < 8; k++) {
+      const x = mx - LANDS[k].ox * e
+      const y = my - LANDS[k].oy * e
+      if (pieceDist(x - D, y - D, k) <= 0) return [x, y]
+    }
+    return null
+  }
+  function mapOf(wx: number, wy: number, e = mapE): [number, number] {
+    const k = e < 0.001 ? -1 : pieceOf(wx, wy)
+    return k < 1 ? [wx, wy] : [wx + LANDS[k].ox * e, wy + LANDS[k].oy * e]
+  }
+  /** the land nearest to a map point, for streaming tiles while the centre is over water */
+  function nearestLand(mx: number, my: number) {
+    let best = 0
+    let bd = Infinity
+    for (let k = 0; k < 8; k++) {
+      const d = pieceDist(mx - LANDS[k].ox * mapE - D, my - LANDS[k].oy * mapE - D, k)
+      if (d < bd) {
+        bd = d
+        best = k
+      }
+    }
+    return best
+  }
 
   // ---- camera ----------------------------------------------------------------------
   /** world point at the screen centre, css px per cell, view rotation */
-  const cam = { x: D, y: D, z: 1, a: 0.9 }
+  const cam = { x: D, y: D, z: 1, a: MAP_ON ? 0 : 0.9 }
   let tgtZ = 1
   let anchor: { sx: number; sy: number; wx: number; wy: number } | null = null
   let flight: { t0: number; dur: number; f: (t: number) => [number, number, number]; a0: number; done?: () => void } | null = null
   const vel = { x: 0, y: 0, a: 0 }
   let W = 1
   let Hh = 1
+  /** the planet filling the view: the yardstick for level-of-detail thresholds */
   const zFit = () => (Math.min(W, Hh) * 0.86) / (2 * R)
+  /** the whole world map in view: where the page opens */
+  const zHome = () => (MAP_ON ? (W < 760 ? W * 1.04 : Math.min(Math.min(W, Hh) * 0.98, W * 0.64)) / (2 * R * 1.68) : zFit())
+  /** furthest out: the continents have closed back into one planet */
+  const zMin = () => (MAP_ON ? zHome() * 0.62 : zFit())
+  const mapAt = (z: number) => (MAP_ON ? smooth(zHome() * 0.7, zHome() * 0.97, z) : 0)
   const zMax = () => Math.min(W, Hh) * 0.5
   let lastInput = 0
   let wasAtMax = false
 
-  const toWorld = (sx: number, sy: number): [number, number] => {
+  const toMapPt = (sx: number, sy: number): [number, number] => {
     const dx = (sx - W / 2) / cam.z
     const dy = (sy - Hh / 2) / cam.z
     const c = Math.cos(cam.a)
     const s = Math.sin(cam.a)
     return [cam.x + c * dx - s * dy, cam.y + s * dx + c * dy]
   }
-  const toScreen = (wx: number, wy: number): [number, number] => {
+  const mapToScreen = (wx: number, wy: number): [number, number] => {
     const dx = wx - cam.x
     const dy = wy - cam.y
     const c = Math.cos(cam.a)
     const s = Math.sin(cam.a)
     return [(c * dx + s * dy) * cam.z + W / 2, (-s * dx + c * dy) * cam.z + Hh / 2]
   }
+  /** screen → disc cell coordinates; far off the disc when the point is over the sea */
+  const toWorld = (sx: number, sy: number): [number, number] => discOf(...toMapPt(sx, sy)) ?? [-1e7, -1e7]
+  const toScreen = (wx: number, wy: number): [number, number] => mapToScreen(...mapOf(wx, wy))
   /** rotate the planet on screen by d radians around the disc centre */
   const rotatePlanet = (d: number) => {
-    const [sx, sy] = toScreen(D, D)
+    if (mapE > 0.02) return
+    const [sx, sy] = mapToScreen(D, D)
     cam.a -= d
-    const [wx, wy] = toWorld(sx, sy)
+    const [wx, wy] = toMapPt(sx, sy)
     cam.x += D - wx
     cam.y += D - wy
   }
@@ -496,16 +803,17 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     const dx = cam.x - D
     const dy = cam.y - D
     const r = Math.hypot(dx, dy)
-    if (r > R) {
-      cam.x = D + (dx / r) * R
-      cam.y = D + (dy / r) * R
+    const lim = R * (1 + 0.7 * mapE)
+    if (r > lim) {
+      cam.x = D + (dx / r) * lim
+      cam.y = D + (dy / r) * lim
     }
   }
 
   function zoomAt(factor: number, sx: number, sy: number) {
-    const nz = Math.min(zMax(), Math.max(zFit(), tgtZ * factor))
+    const nz = Math.min(zMax(), Math.max(zMin(), tgtZ * factor))
     if (!anchor || Math.abs(anchor.sx - sx) > 2 || Math.abs(anchor.sy - sy) > 2) {
-      const [wx, wy] = toWorld(sx, sy)
+      const [wx, wy] = toMapPt(sx, sy)
       anchor = { sx, sy, wx, wy }
     }
     tgtZ = nz
@@ -514,8 +822,10 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   }
 
   /** van Wijk & Nuij smooth zoom-and-pan */
-  function flyTo(wx: number, wy: number, z1: number, done?: () => void) {
-    z1 = Math.min(zMax(), Math.max(zFit(), z1))
+  function flyTo(wx: number, wy: number, z1: number, done?: () => void, raw = false) {
+    z1 = Math.min(zMax(), Math.max(zMin(), z1))
+    // callers pass disc cells; the camera lives on the map as it will be laid out at the target zoom
+    if (!raw) [wx, wy] = mapOf(wx, wy, mapAt(z1))
     anchor = null
     vel.x = vel.y = vel.a = 0
     if (reducedMotion) {
@@ -558,6 +868,74 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     sound.whoosh(dur / 1000, z1 > cam.z)
   }
 
+  // ---- legend, breadcrumb and place names ---------------------------------------------------
+  const panelEl = $('.hero-panel')
+  const crumb = $('.hero-crumb')
+  const legendEl = $('.hero-legend')
+  const labelsEl = $('.hero-labels')
+  /** where each land's name sits, in disc cells, and a representative colour sampled from the overview */
+  const landInfo = LANDS.map((l) => {
+    const cx = l.k ? D + Math.cos(l.mid) * R * 0.82 : D
+    const cy = l.k ? D + Math.sin(l.mid) * R * 0.82 : D
+    let r = 0, g = 0, b = 0, n = 0, cells = 0
+    for (let y = 4; y < SIDE; y += 8)
+      for (let x = 4; x < SIDE; x += 8) {
+        if (pieceDist(x - D, y - D, l.k) > 0) continue
+        cells += 64
+        const o = (y * SIDE + x) * 4
+        if (!overview.px[o + 3]) continue
+        r += overview.px[o]; g += overview.px[o + 1]; b += overview.px[o + 2]; n++
+      }
+    const m = (r + g + b) / 3 / Math.max(1, n)
+    // push the average away from grey so the swatch reads as the land's hue
+    const boost = (v: number) => Math.round(Math.max(0, Math.min(255, (m + (v / Math.max(1, n) - m) * 1.9) * 1.35)))
+    return { cx, cy, cells, color: l.k ? `rgb(${boost(r)},${boost(g)},${boost(b)})` : '#a9a7b2' }
+  })
+  const flyLand = (k: number) => {
+    deselect()
+    flyTo(landInfo[k].cx, landInfo[k].cy, zHome() * (k ? 2.6 : 1.9))
+    sound.click()
+  }
+  LANDS.forEach((l, k) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.title = `${l.name} · ${l.note}`
+    b.innerHTML = `<i style="background:${landInfo[k].color}"></i><span>${l.name}</span><small>${Math.round(landInfo[k].cells / 1e4)} 万</small>`
+    b.addEventListener('click', () => flyLand(k))
+    legendEl.append(b)
+  })
+  const labels = LANDS.map((l, k) => {
+    const sp = document.createElement('span')
+    sp.style.color = landInfo[k].color
+    sp.innerHTML = `${l.name}<small>${l.note} · ${Math.round(landInfo[k].cells / 1e4)} 万张</small>`
+    labelsEl.append(sp)
+    return sp
+  })
+  if (!MAP_ON) {
+    legendEl.hidden = true
+    labelsEl.hidden = true
+  }
+  crumb.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).closest('button')
+    if (!t) return
+    deselect()
+    if (t.dataset.go === 'planet') goPlanet()
+    else if (t.dataset.go === 'home') goHome()
+    else flyLand(Number(t.dataset.go))
+    sound.click()
+  })
+  $('.hero-logo').addEventListener('click', () => {
+    deselect()
+    goHome()
+  })
+  let crumbKey = ''
+
+  /** on wide screens the map sits to the right of the title plate */
+  const homeX = () => D - (MAP_ON && W > 900 ? (W * 0.14) / zHome() : 0)
+  /** on phones the plate takes the top of the screen, so the map sits lower */
+  const homeY = () => D - (MAP_ON && W < 760 ? (Hh * 0.2) / zHome() : 0)
+  const goHome = () => flyTo(homeX(), homeY(), zHome(), undefined, true)
+  const goPlanet = () => flyTo(D, D, zMin(), undefined, true)
   const cellXY = (cell: number): [number, number] => [(cell % SIDE) + 0.5, Math.floor(cell / SIDE) + 0.5]
   const flyToCell = (cell: number, z = 72) => {
     const [x, y] = cellXY(cell)
@@ -788,7 +1166,11 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const k = b.dataset.zoom
       if (k === 'fit') {
         deselect()
-        flyTo(D, D, zFit())
+        goHome()
+      } else if (k === 'planet') {
+        deselect()
+        if (mapE > 0.5) goPlanet()
+        else goHome()
       } else zoomAt(k === 'in' ? 2.2 : 1 / 2.2, W / 2, Hh / 2)
       sound.click()
     }),
@@ -797,7 +1179,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     if (!el.classList.contains('is-active') || e.target instanceof HTMLInputElement) return
     if (e.key === '+' || e.key === '=') zoomAt(1.8, W / 2, Hh / 2)
     else if (e.key === '-' || e.key === '_') zoomAt(1 / 1.8, W / 2, Hh / 2)
-    else if (e.key === '0') flyTo(D, D, zFit())
+    else if (e.key === '0') goHome()
     else if (e.key === 'q' || e.key === 'Q') rotatePlanet(-0.12)
     else if (e.key === 'e' || e.key === 'E') rotatePlanet(0.12)
   })
@@ -831,9 +1213,9 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       drag = null
       return
     }
-    const [cx0, cy0] = toScreen(D, D)
+    const [cx0, cy0] = mapToScreen(D, D)
     const rDisc = R * cam.z
-    const onRim = Math.hypot(p.x - cx0, p.y - cy0) > rDisc * 0.97 && Math.hypot(p.x - cx0, p.y - cy0) < rDisc * 1.35 + 30
+    const onRim = mapE < 0.02 && Math.hypot(p.x - cx0, p.y - cy0) > rDisc * 0.97 && Math.hypot(p.x - cx0, p.y - cy0) < rDisc * 1.35 + 30
     drag = { mode: e.shiftKey || e.button === 2 || onRim ? 'rotate' : 'pan', sx: p.x, sy: p.y, moved: false, last: performance.now() }
     canvas.classList.add('is-grabbing')
     canvas.classList.toggle('is-rotating', drag.mode === 'rotate')
@@ -849,9 +1231,9 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const d = Math.hypot(a.x - b.x, a.y - b.y)
       const mx = (a.x + b.x) / 2
       const my = (a.y + b.y) / 2
-      const [wx, wy] = toWorld(pinch.mx, pinch.my)
-      cam.z = tgtZ = Math.min(zMax(), Math.max(zFit(), cam.z * (d / pinch.d)))
-      const [nx, ny] = toWorld(mx, my)
+      const [wx, wy] = toMapPt(pinch.mx, pinch.my)
+      cam.z = tgtZ = Math.min(zMax(), Math.max(zMin(), cam.z * (d / pinch.d)))
+      const [nx, ny] = toMapPt(mx, my)
       cam.x += wx - nx
       cam.y += wy - ny
       // two-finger twist turns the planet
@@ -872,7 +1254,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const dt = Math.max(1, now - drag.last) / 16.7
       drag.last = now
       if (drag.mode === 'rotate') {
-        const [cx, cy] = toScreen(D, D)
+        const [cx, cy] = mapToScreen(D, D)
         const a0 = Math.atan2(prev.y - cy, prev.x - cx)
         const a1 = Math.atan2(p.y - cy, p.x - cx)
         let da = a1 - a0
@@ -899,9 +1281,9 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       return
     }
     {
-      const [cx0, cy0] = toScreen(D, D)
+      const [cx0, cy0] = mapToScreen(D, D)
       const dd = Math.hypot(p.x - cx0, p.y - cy0)
-      canvas.classList.toggle('is-rim', dd > R * cam.z * 0.97 && dd < R * cam.z * 1.35 + 30)
+      canvas.classList.toggle('is-rim', mapE < 0.02 && dd > R * cam.z * 0.97 && dd < R * cam.z * 1.35 + 30)
     }
     updateHover()
   })
@@ -976,7 +1358,13 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     if (canvas.width !== W || canvas.height !== Hh) {
       canvas.width = W
       canvas.height = Hh
-      if (cam.z < zFit()) cam.z = tgtZ = zFit()
+      if (cam.z < zMin()) cam.z = tgtZ = zHome()
+    }
+    if (!homed && W > 50 && Hh > 50) {
+      homed = true
+      cam.z = tgtZ = zHome()
+      cam.x = homeX()
+      cam.y = homeY()
     }
     const prevZ = cam.z
 
@@ -1015,14 +1403,14 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
           vel.y *= Math.exp(-dt * 5)
         }
         // unwind the spin as we get close, so sprites end up upright
-        const k = smooth(zFit() * 3, zFit() * 14, cam.z)
+        const k = Math.max(smooth(zFit() * 3, zFit() * 14, cam.z), mapE > 0.02 ? 1 : 0)
         if (k > 0) {
           const full = Math.round(cam.a / (2 * Math.PI)) * 2 * Math.PI
           cam.a += (full - cam.a) * Math.min(1, dt * 5 * k)
         }
         // idle drift when far away
         const idle = now - lastInput > 2500
-        if (idle && !reducedMotion && cam.z < zFit() * 1.6 && Math.abs(vel.a) < 1e-4) rotatePlanet(dt * 0.035)
+        if (idle && !reducedMotion && mapE < 0.02 && Math.abs(vel.a) < 1e-4) rotatePlanet(dt * 0.035)
       }
       if (anchor) {
         const dx = (anchor.sx - W / 2) / cam.z
@@ -1037,15 +1425,19 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     }
 
     const z = cam.z
-    // ---- streaming
-    const corners = [toWorld(0, 0), toWorld(W, 0), toWorld(0, Hh), toWorld(W, Hh)]
-    const xs = corners.map((c) => c[0])
-    const ys = corners.map((c) => c[1])
+    mapE = mapAt(z)
+    // ---- streaming: tiles are asked for in disc space, through the land nearest the view centre
+    const near = LANDS[mapE > 0.001 ? nearestLand(cam.x, cam.y) : 0]
+    const corners = [toMapPt(0, 0), toMapPt(W, 0), toMapPt(0, Hh), toMapPt(W, Hh)]
+    const xs = corners.map((c) => c[0] - near.ox * mapE)
+    const ys = corners.map((c) => c[1] - near.oy * mapE)
     const box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] as const
+    const tcx = cam.x - near.ox * mapE
+    const tcy = cam.y - near.oy * mapE
     const m1 = smooth(2.2, 4.2, z)
     const m2 = smooth(8.5, 15, z)
-    if (z >= 1.9) L1.update(L1.want(...box, cam.x, cam.y), now)
-    if (z >= 7) L2.update(L2.want(...box, cam.x, cam.y), now)
+    if (z >= 1.9) L1.update(L1.want(...box, tcx, tcy), now)
+    if (z >= 7) L2.update(L2.want(...box, tcx, tcy), now)
     L1.flush()
     L2.flush()
 
@@ -1074,7 +1466,14 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     gl!.uniform1f(u.uM2, m2)
     gl!.uniform1f(u.uGrid, smooth(40, 90, z))
     gl!.uniform1f(u.uCellGrid, smooth(6, 16, z) * 0.6)
-    gl!.uniform1f(u.uShade, 1 - smooth(1.2, 4, z / zFit()))
+    const shade = 1 - smooth(1.2, 4, z / zFit())
+    gl!.uniform1f(u.uShade, shade)
+    // blocks shrink as you fly in, so the mosaic resolves into the real sprites
+    // a negative block means “this many blocks across the planet”, whatever the screen size
+    const block = MAP_ON ? 1 + 2 * shade * (mapE > 0.001 ? 1 : 0) : (RING.block < 0 ? (2 * R * z) / -RING.block : RING.block) * (0.15 + 0.85 * shade)
+    gl!.uniform1f(u.uStyle, MAP_ON || block < 1.6 ? 0 : RING.style)
+    gl!.uniform1f(u.uBlock, block)
+    gl!.uniform1f(u.uMap, mapE)
     gl!.drawArrays(gl!.TRIANGLES, 0, 3)
 
     if (hitCount) {
@@ -1087,6 +1486,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       gl!.uniform1f(hu.uZoom, z)
       gl!.uniform1f(hu.uAngle, cam.a)
       gl!.uniform1f(hu.uTime, time)
+      gl!.uniform1f(hu.uMap, mapE)
       gl!.drawArraysInstanced(gl!.TRIANGLE_STRIP, 0, 4, hitCount)
       gl!.disable(gl!.BLEND)
     }
@@ -1114,6 +1514,24 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     if (!tip.hidden) {
       if (hoverCell !== capFor || hoverCell < 0) tip.hidden = true
       else tip.style.transform = `translate(${Math.min(mouse.x + 18, W - 300)}px, ${mouse.y + 20}px)`
+    }
+
+    if (MAP_ON) {
+      const show = mapE > 0.7 && z < zHome() * 3.4 && !hitCount
+      const pr = show ? panelEl.getBoundingClientRect() : null
+      const cr = show ? canvas.getBoundingClientRect() : null
+      labels.forEach((sp, k) => {
+        let on = show
+        if (pr && cr) {
+          const [sx, sy] = toScreen(landInfo[k].cx, landInfo[k].cy)
+          const px = sx + cr.left
+          const py = sy + cr.top
+          if (sx < 40 || sy < 70 || sx > W - 40 || sy > Hh - 60) on = false
+          if (px > pr.left - 70 && px < pr.right + 70 && py > pr.top - 26 && py < pr.bottom + 26) on = false
+          sp.style.transform = `translate(${Math.round(sx)}px, ${Math.round(sy)}px) translate(-50%, -50%)`
+        }
+        sp.style.opacity = on ? '1' : '0'
+      })
     }
 
     // sound follows motion: wind from zoom speed, pitch from depth
@@ -1146,13 +1564,32 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
         : z < zFit() * 3.2
           ? touch
             ? '双指缩放 / 旋转 · 点一下放大'
-            : '滚轮缩放 · 拖动平移 · 拖外圈旋转 · 点一下放大'
+            : mapE > 0.5
+              ? '滚轮缩放 · 拖动平移 · 点一下放大 · 继续缩小会合拢成星球'
+              : '这是同一批素材合拢成的星球 · 拖外圈旋转 · 放大就裂开成地图'
           : z < 8
             ? '再点一下继续放大 · 滚轮缩放'
             : touch
               ? '拖动平移 · 点素材看详情'
               : '拖动平移 · 点素材看详情 · 再点一次放到最大'
       intro.style.opacity = String(1 - smooth(1.4, 3, z / zFit()))
+      if (MAP_ON) {
+        // the plate: full on arrival, one line while exploring; the breadcrumb says where the view centre is
+        const away = z > zHome() * 1.22 || z < zHome() * 0.9 || Math.hypot(cam.x - homeX(), cam.y - homeY()) > R * 0.2
+        el.classList.toggle('is-exploring', away)
+        const here = mapE < 0.5 ? -2 : (() => {
+          const p = discOf(cam.x, cam.y)
+          return p ? pieceOf(p[0], p[1]) : -1
+        })()
+        const key = `${here}|${z >= 8}`
+        if (key !== crumbKey) {
+          crumbKey = key
+          crumb.innerHTML =
+            here === -2
+              ? `<b>星球</b> › <button type="button" data-go="home">展开成地图</button>`
+              : `<button type="button" data-go="planet">星球</button> › <button type="button" data-go="home">世界</button> › ${here < 0 ? '海上' : `<button type="button" data-go="${here}">${LANDS[here].name}</button>`}${z >= 8 ? ' › <b>素材</b>' : ''}`
+        }
+      }
       el.classList.toggle('is-deep', z > 12)
     }
     updateHover()
@@ -1183,7 +1620,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       if (cam.z < 0.001) {
         W = canvas.clientWidth
         Hh = canvas.clientHeight
-        cam.z = tgtZ = zFit()
+        cam.z = tgtZ = zHome()
       }
       cancelAnimationFrame(raf)
       loop()
