@@ -9,6 +9,7 @@
  * tile → array layer, and the shader falls back level by level when a tile
  * isn't there yet. Searching, flying and rotating all run on this.
  */
+import gsap from 'gsap'
 import { sound } from '../audio'
 import {
   atlasFetch,
@@ -279,21 +280,25 @@ void main() {
       if (cdist > -st * 1.1) base = vec3(0.04, 0.05, 0.13);
       far = mix(far, base, uMap * uShade);
     } else {
-      // beaches of uneven width give the cut pieces capes and bays; a few sand islets dot the open sea
+      // every bit of land is made of sprites, so the coast is only a thin sand line (a few screen pixels, whatever the zoom);
+      // the capes and bays are drawn in the water instead, as shallows of uneven width
       float cape = 0.5 + 0.5 * sin(m.x * 0.009 + sin(m.y * 0.007) * 2.2);
       float bw = uR * (0.018 + 0.1 * cape * cape) * uMap;
-      float isl = sin(m.x * 0.013 + 1.7) * sin(m.y * 0.016 + 0.4) + 0.5 * sin((m.x + m.y) * 0.031);
+      float sw = min(bw, (MB + 3.0 * cape) / uZoom);
+      float tick = floor(uTime * 2.2);
       vec3 sea;
-      if (cdist < bw) {
-        sea = cdist > bw - st * 1.1 ? vec3(0.72, 0.62, 0.40) : (cdist < bw * 0.45 && cape > 0.6 ? vec3(0.62, 0.74, 0.42) : vec3(0.90, 0.81, 0.56));
-      } else if (cdist > bw + uR * 0.12 && isl > 1.3 && uMap > 0.9) {
-        sea = isl > 1.37 ? vec3(0.45, 0.68, 0.40) : vec3(0.90, 0.81, 0.56);
+      if (cdist < sw) {
+        sea = vec3(0.90, 0.81, 0.56);
+      } else if (cdist < bw) {
+        float k = (cdist - sw) / max(bw - sw, 0.001);
+        sea = k < 0.42 ? vec3(0.45, 0.82, 0.80) : (k < 0.8 ? vec3(0.31, 0.68, 0.78) : vec3(0.24, 0.57, 0.74));
+        if (cdist < sw + st * 1.2 && mod(mcell.x + mcell.y + tick, 5.0) < 2.0) sea = vec3(0.91, 0.96, 1.0);
+        else if (hash(vec2(floor(mcell.x / 2.0), mcell.y)) > 0.965 && mod(mcell.x + tick, 6.0) < 2.0) sea = vec3(0.70, 0.93, 0.92);
+        if (mod(mcell.x + mcell.y, 2.0) < 1.0) sea *= 0.96;
       } else {
         float dd = (cdist - bw) / (uR * 0.028);
         sea = mix(vec3(0.20, 0.50, 0.70), vec3(0.055, 0.13, 0.30), min(1.0, floor(dd) / 4.0));
-        float tick = floor(uTime * 2.2);
-        if (dd < 1.0 && mod(mcell.x + mcell.y + tick, 5.0) < 2.0) sea = vec3(0.91, 0.96, 1.0);
-        else if (dd > 3.0 && hash(vec2(floor(mcell.x / 2.0), mcell.y)) > 0.975 && mod(mcell.x + tick, 7.0) < 3.0) sea *= 1.5;
+        if (dd > 3.0 && hash(vec2(floor(mcell.x / 2.0), mcell.y)) > 0.975 && mod(mcell.x + tick, 7.0) < 3.0) sea *= 1.5;
         if (mod(mcell.x + mcell.y, 2.0) < 1.0) sea *= 0.94;
       }
       far = mix(far, sea, uMap);
@@ -812,6 +817,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   }
 
   function zoomAt(factor: number, sx: number, sy: number) {
+    closeGather()
     const nz = Math.min(zMax(), Math.max(zMin(), tgtZ * factor))
     if (!anchor || Math.abs(anchor.sx - sx) > 2 || Math.abs(anchor.sy - sy) > 2) {
       const [wx, wy] = toMapPt(sx, sy)
@@ -824,6 +830,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
 
   /** van Wijk & Nuij smooth zoom-and-pan */
   function flyTo(wx: number, wy: number, z1: number, done?: () => void, raw = false) {
+    closeGather()
     z1 = Math.min(zMax(), Math.max(zMin(), z1))
     // callers pass disc cells; the camera lives on the map as it will be laid out at the target zoom
     if (!raw) [wx, wy] = mapOf(wx, wy, mapAt(z1))
@@ -1022,23 +1029,186 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     hitCount = n
   }
 
-  /** a few results that share tiles, so the tray costs few downloads */
-  function pickTray(cells: Uint32Array, n = 12) {
-    const per = new Map<number, number[]>()
+  // ---- gather: the best results leave their lands and meet in the middle of the screen -------
+  const gatherEl = $('.hero-gather')
+  interface GItem { cell: number; el: HTMLButtonElement; x: number; y: number; size: number; ready: boolean }
+  let gItems: GItem[] = []
+  let gathered = false
+  let gatherK = 0
+  let gatherCells: number[] = []
+  let gHover: GItem | null = null
+  let swallowClick = false
+
+  /**
+   * The results to show, best first. Sprites come out of level-2 tiles, so the pick is
+   * limited to a few tiles: the best one on each land, then the ones holding the most results.
+   */
+  function pickGather(cells: Uint32Array, n = 220, budget = 22) {
     const t = meta.l2.cells
-    for (const c of cells) {
-      const key = Math.floor(Math.floor(c / SIDE) / t) * 1000 + Math.floor((c % SIDE) / t)
-      const list = per.get(key)
-      if (list) list.push(c)
-      else per.set(key, [c])
+    const nt = meta.l2.tiles
+    const tileOf = (c: number) => Math.floor(Math.floor(c / SIDE) / t) * nt + Math.floor((c % SIDE) / t)
+    const weight = new Map<number, number>()
+    for (let i = 0; i < cells.length; i++) {
+      const k = tileOf(cells[i])
+      weight.set(k, (weight.get(k) ?? 0) + 1 / (1 + i / 400))
     }
-    const groups = [...per.values()].sort((a, b) => b.length - a.length)
+    const ranked = [...weight.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])
+    const chosen = new Set<number>()
+    const landSeen = new Set<number>()
+    for (const k of ranked) {
+      const land = pieceOf(((k % nt) + 0.5) * t, (Math.floor(k / nt) + 0.5) * t)
+      if (landSeen.has(land)) continue
+      landSeen.add(land)
+      chosen.add(k)
+    }
+    for (const k of ranked) {
+      if (chosen.size >= budget) break
+      chosen.add(k)
+    }
+    const perTile = new Map<number, number>()
+    const cap = Math.max(6, Math.ceil((n / Math.max(1, chosen.size)) * 1.6))
     const out: number[] = []
-    for (let round = 0; out.length < n && round < 6; round++)
-      for (const g of groups.slice(0, 6)) {
-        if (g[round] !== undefined && out.length < n) out.push(g[round])
-      }
+    for (let i = 0; i < cells.length && out.length < n; i++) {
+      const k = tileOf(cells[i])
+      if (!chosen.has(k)) continue
+      const c = perTile.get(k) ?? 0
+      if (c >= cap) continue
+      perTile.set(k, c + 1)
+      out.push(cells[i])
+    }
     return out
+  }
+
+  /** the part of the screen the gathering may use: beside the plate on wide screens, under it on phones */
+  function gatherRect() {
+    const pr = panelEl.getBoundingClientRect()
+    const cr = canvas.getBoundingClientRect()
+    if (W < 760) return { x0: 8, x1: W - 56, y0: Math.min(Hh * 0.6, pr.bottom - cr.top + 10), y1: Hh - 64 }
+    return { x0: pr.right - cr.left + 24, x1: W - 76, y0: 120, y1: Hh - 96 }
+  }
+
+  /** a sunflower spiral: the best result big in the middle, the rest shrinking outwards */
+  function gatherSlots(n: number, rect: { x0: number; x1: number; y0: number; y1: number }) {
+    const rw = Math.max(40, (rect.x1 - rect.x0) / 2)
+    const rh = Math.max(40, (rect.y1 - rect.y0) / 2)
+    const asp = Math.min(1.45, Math.max(0.7, rw / rh))
+    const sx = Math.sqrt(asp)
+    const sy = 1 / sx
+    const room = Math.min(rw / sx, rh / sy)
+    const cx = Math.round((rect.x0 + rect.x1) / 2)
+    const cy = Math.round((rect.y0 + rect.y1) / 2)
+    const need = Math.min(n, 36)
+    let best: { x: number; y: number; size: number }[] = []
+    for (const scale of [1, 0.75, 0.5]) {
+      const slots: { x: number; y: number; size: number }[] = []
+      let area = 0
+      for (let i = 0; i < n; i++) {
+        const base = i === 0 ? 96 : i < 7 ? 64 : i < 27 ? 48 : 32
+        const size = Math.max(16, Math.round((base * scale) / 16) * 16)
+        const cellArea = (size + 5) ** 2
+        const r = i === 0 ? 0 : Math.sqrt((area + cellArea / 2) / Math.PI) * 1.0 * Math.max(sx, sy)
+        area += cellArea
+        if (r + size / 2 > room) break
+        const a = i * 2.399963
+        slots.push({ x: Math.round(cx + Math.cos(a) * r * sx - size / 2), y: Math.round(cy + Math.sin(a) * r * sy - size / 2), size })
+      }
+      if (slots.length > best.length) best = slots
+      if (slots.length >= need) break
+    }
+    return best
+  }
+
+  /** where a result lives on the map right now, as the transform of a tiny copy of it */
+  const homeOf = (g: GItem) => {
+    const [x, y] = cellXY(g.cell)
+    const [sx, sy] = toScreen(x, y)
+    return { x: sx - g.size / 2, y: sy - g.size / 2, scale: Math.max(cam.z, 4) / g.size }
+  }
+  function sendHome(g: GItem) {
+    g.el.style.pointerEvents = 'none'
+    if (reducedMotion || !g.ready) {
+      g.el.remove()
+      return
+    }
+    gsap.to(g.el, { ...homeOf(g), opacity: 0, duration: 0.32, ease: 'steps(6)', overwrite: true, onComplete: () => g.el.remove() })
+  }
+  function arrive(g: GItem, i: number) {
+    if (reducedMotion) {
+      gsap.set(g.el, { x: g.x, y: g.y, scale: 1, opacity: 1 })
+      return
+    }
+    gsap.fromTo(
+      g.el,
+      { ...homeOf(g), opacity: 1 },
+      { x: g.x, y: g.y, scale: 1, duration: 0.5, delay: Math.min(0.5, i * 0.004), ease: 'steps(9)', overwrite: true },
+    )
+  }
+
+  function openGather(cells: number[]) {
+    if (!cells.length) return closeGather()
+    deselect()
+    flight = null
+    anchor = null
+    gathered = true
+    el.classList.add('is-gathered')
+    const slots = gatherSlots(cells.length, gatherRect())
+    const old = new Map(gItems.map((g) => [g.cell, g]))
+    gItems = cells.slice(0, slots.length).map((cell, i) => {
+      const slot = slots[i]
+      let g = old.get(cell)
+      if (g) {
+        old.delete(cell)
+        Object.assign(g, slot)
+        g.el.style.width = g.el.style.height = `${slot.size}px`
+        if (g.ready) gsap.to(g.el, { x: g.x, y: g.y, scale: 1, opacity: 1, duration: reducedMotion ? 0 : 0.3, ease: 'steps(5)', overwrite: true })
+        return g
+      }
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'gather-item'
+      b.setAttribute('aria-label', `第 ${i + 1} 个结果，点击飞到它在地图上的位置`)
+      b.style.width = b.style.height = `${slot.size}px`
+      const item: GItem = { cell, el: b, ...slot, ready: false }
+      b.addEventListener('click', () => {
+        tourAt = tour.indexOf(cell)
+        flyToCell(cell)
+      })
+      b.addEventListener('pointerenter', () => {
+        gHover = item
+        sound.tick(1700 + (i % 12) * 70, 0.012)
+        tip.hidden = true
+        cellInfo(cell).then((info) => {
+          if (gHover !== item || !info) return
+          tip.textContent = info.caption
+          tip.hidden = false
+          tip.style.transform = `translate(${Math.max(8, Math.min(item.x, W - 300))}px, ${item.y + item.size + 10}px)`
+        })
+      })
+      b.addEventListener('pointerleave', () => {
+        if (gHover !== item) return
+        gHover = null
+        tip.hidden = true
+      })
+      gatherEl.append(b)
+      spriteCanvas(cell).then((c) => {
+        if (!c || !gItems.includes(item)) return b.remove()
+        b.append(c)
+        item.ready = true
+        arrive(item, i)
+      })
+      return item
+    })
+    for (const g of old.values()) sendHome(g)
+  }
+
+  function closeGather() {
+    if (!gathered) return
+    gathered = false
+    el.classList.remove('is-gathered')
+    if (gHover) tip.hidden = true
+    gHover = null
+    for (const g of gItems) sendHome(g)
+    gItems = []
   }
 
   function renderTray(cells: number[]) {
@@ -1067,6 +1237,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     el.classList.toggle('is-searching', !!q.trim())
     if (!q.trim()) {
       setHits(null)
+      closeGather()
+      gatherCells = []
       status.textContent = ''
       subjectsEl.replaceChildren()
       tray.replaceChildren()
@@ -1080,6 +1252,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     indexLoaded = true
     if (seq !== searchSeq || !res) return
     if (res.kind === 'color') {
+      closeGather()
+      gatherCells = []
       setHits(null)
       subjectsEl.replaceChildren()
       tray.replaceChildren()
@@ -1090,6 +1264,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       return
     }
     if (res.kind === 'none') {
+      closeGather()
+      gatherCells = []
       setHits(null)
       subjectsEl.replaceChildren()
       tray.replaceChildren()
@@ -1100,7 +1276,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     }
     setHits(res.cells)
     const label = res.color ? `${res.color.label}的「${res.english}」` : `「${q.trim()}」`
-    status.innerHTML = `${label}命中 <b>${fmt(res.total)}</b> 张 · ${res.subjects.length} 个主题${res.total ? ' · 金点就是它们' : ''}`
+    gatherCells = pickGather(res.cells, W < 760 ? 120 : 220, W < 760 ? 14 : 22)
+    status.innerHTML = `${label}命中 <b>${fmt(res.total)}</b> 张 · ${res.subjects.length} 个主题${res.total ? ' · 金点是它们在地图上的家' : ''}`
     sound.results(res.total)
     subjectsEl.replaceChildren(
       ...res.subjects.slice(0, 6).map((s) => {
@@ -1116,11 +1293,9 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
         return b
       }),
     )
-    renderTray(pickTray(res.cells))
-    if (fly && tour.length) {
-      tourAt = 0
-      flyToCell(tour[0])
-    }
+    renderTray(gatherCells.slice(0, 12))
+    // (the plate changes height with the new status line, and the gathering sits beside / under it)
+    requestAnimationFrame(() => seq === searchSeq && openGather(gatherCells))
   }
 
   let deb = 0
@@ -1135,8 +1310,16 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   form.addEventListener('submit', (e) => {
     e.preventDefault()
     clearTimeout(deb)
+    if (gathered) return
     if (tour.length && input.value.trim()) step(1)
     else runSearch(true)
+  })
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeGather()
+  })
+  stepEl.querySelector('[data-gather]')!.addEventListener('click', () => {
+    openGather(gatherCells)
+    sound.results(gatherCells.length)
   })
   const step = (d: number) => {
     if (!tour.length) return
@@ -1178,6 +1361,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   )
   window.addEventListener('keydown', (e) => {
     if (!el.classList.contains('is-active') || e.target instanceof HTMLInputElement) return
+    if (e.key === 'Escape') closeGather()
     if (e.key === '+' || e.key === '=') zoomAt(1.8, W / 2, Hh / 2)
     else if (e.key === '-' || e.key === '_') zoomAt(1 / 1.8, W / 2, Hh / 2)
     else if (e.key === '0') goHome()
@@ -1204,6 +1388,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     const p = local(e)
     pointers.set(e.pointerId, p)
     canvas.setPointerCapture(e.pointerId)
+    swallowClick = gathered
+    closeGather()
     flight = null
     anchor = null
     vel.x = vel.y = vel.a = 0
@@ -1295,7 +1481,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     canvas.classList.remove('is-grabbing', 'is-rotating')
     if (!drag) return
     const p = local(e)
-    if (!drag.moved && e.type === 'pointerup' && e.button === 0) clickAt(p.x, p.y)
+    if (!drag.moved && !swallowClick && e.type === 'pointerup' && e.button === 0) clickAt(p.x, p.y)
     if (performance.now() - drag.last > 80) vel.x = vel.y = vel.a = 0
     drag = null
   }
@@ -1360,6 +1546,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       canvas.width = W
       canvas.height = Hh
       if (cam.z < zMin()) cam.z = tgtZ = zHome()
+      if (gathered) requestAnimationFrame(() => gathered && openGather(gatherCells))
     }
     if (!homed && W > 50 && Hh > 50) {
       homed = true
@@ -1462,7 +1649,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     gl!.uniform1f(u.uZoom, z)
     gl!.uniform1f(u.uAngle, cam.a)
     gl!.uniform1f(u.uTime, time)
-    gl!.uniform1f(u.uDim, hitCount ? 0.5 * (1 - smooth(10, 30, z)) : 0)
+    gatherK += ((gathered ? 1 : 0) - gatherK) * Math.min(1, dt * 9)
+    gl!.uniform1f(u.uDim, Math.max(hitCount ? 0.5 * (1 - smooth(10, 30, z)) : 0, 0.74 * gatherK))
     gl!.uniform1f(u.uM1, m1)
     gl!.uniform1f(u.uM2, m2)
     gl!.uniform1f(u.uGrid, smooth(40, 90, z))
@@ -1512,13 +1700,13 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     }
     place(reticle, selected, 12)
     place(hoverBox, hoverCell !== selected ? hoverCell : -1, 0)
-    if (!tip.hidden) {
+    if (!tip.hidden && !gHover) {
       if (hoverCell !== capFor || hoverCell < 0) tip.hidden = true
       else tip.style.transform = `translate(${Math.min(mouse.x + 18, W - 300)}px, ${mouse.y + 20}px)`
     }
 
     if (MAP_ON) {
-      const show = mapE > 0.7 && z < zHome() * 3.4 && !hitCount
+      const show = mapE > 0.7 && z < zHome() * 3.4 && !hitCount && !gathered
       const pr = show ? panelEl.getBoundingClientRect() : null
       const cr = show ? canvas.getBoundingClientRect() : null
       labels.forEach((sp, k) => {

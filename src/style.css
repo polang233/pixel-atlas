@@ -706,3 +706,16 @@ html.bare .hero-labels { display: block !important; }
   .hero-labels span { font-size: 11px; }
   .hero-labels small { display: none; }
 }
+
+/* ===== search: the results gather in the middle of the screen ===== */
+.hero-gather { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.gather-item {
+  position: absolute; left: 0; top: 0; padding: 0; border: 0; background: none; cursor: pointer;
+  pointer-events: auto; opacity: 0; will-change: transform; touch-action: manipulation;
+}
+.gather-item canvas { width: 100%; height: 100%; filter: drop-shadow(2px 2px 0 rgb(0 0 0 / 0.85)); transition: scale 0.1s steps(2); }
+.gather-item:hover, .gather-item:focus-visible { z-index: 2; outline: 0; }
+.gather-item:hover canvas, .gather-item:focus-visible canvas { scale: 1.25; filter: drop-shadow(2px 2px 0 #000) drop-shadow(0 0 0 var(--gold)) drop-shadow(0 0 6px rgb(255 204 77 / 0.8)); }
+.ch-hero.is-gathered .hero-tray, .ch-hero.is-gathered .hero-step, .ch-hero.is-gathered .hero-hint { display: none; }
+.ch-hero.is-gathered .hero-gl { cursor: zoom-out; }
+
