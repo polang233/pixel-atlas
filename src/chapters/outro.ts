@@ -7,10 +7,20 @@ import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
 
+const X_URL = 'https://x.com/polang233'
+
 export function createOutro(el: HTMLElement, sprites: Sprite[], toSearch: () => void): Chapter {
   const rain = el.querySelector<HTMLElement>('.outro-rain')!
   let tweens: gsap.core.Tween[] = []
 
+  if (X_URL) {
+    const x = document.createElement('a')
+    x.href = X_URL
+    x.target = '_blank'
+    x.rel = 'noopener'
+    x.textContent = 'X ↗'
+    el.querySelector('.outro-links')!.append(x)
+  }
   el.querySelector('.outro-search')!.addEventListener('click', () => {
     sound.click()
     toSearch()

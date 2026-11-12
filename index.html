@@ -3,21 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07060c" />
-    <title>Pixel Atlas · 像素图鉴</title>
-    <meta name="description" content="140 万张 16×16 像素素材，排成一颗可以搜索的星球；以及关于像素风格的一切。" />
+    <title>Pixel Atlas · 像素星图</title>
+    <meta name="description" content="数百万像素素材，汇于一处：可以搜索的星图、能玩的小世界，以及关于像素风格的一切。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Pixel Atlas" />
+    <meta property="og:title" content="Pixel Atlas · 像素星图" />
+    <meta property="og:description" content="Millions of pixel-art resources, in one place. Every pixel a star." />
+    <meta property="og:url" content="https://pixelatlas.org/" />
+    <meta property="og:image" content="https://pixelatlas.org/social-card.png" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@polang233" />
+    <meta name="twitter:creator" content="@polang233" />
+    <meta name="twitter:image" content="https://pixelatlas.org/social-card.png" />
   </head>
   <body>
     <div id="app">
       <header class="topbar">
-        <a class="logo" href="#hero">PIXEL<span>·</span>ATLAS</a>
+        <a class="logo" href="#hero" aria-label="Pixel Atlas"><img class="mark" src="/logo.svg" width="32" height="32" alt="" /><b>PIXEL<span>·</span>ATLAS</b></a>
         <nav class="topnav" aria-label="主导航">
           <button type="button" data-go="hero">星图</button>
           <button type="button" data-go="worlds">世界</button>
           <button type="button" data-go="workshop">共创工坊</button>
           <button type="button" data-go="outro">获取</button>
         </nav>
+        <a class="gh-link" href="https://github.com/polang233/pixel-atlas" target="_blank" rel="noopener" aria-label="GitHub 仓库" title="GitHub 仓库"><svg viewBox="0 0 12 12" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM2 1h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM6 2h1v1h-1zM7 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM1 3h1v1h-1zM10 3h1v1h-1zM0 4h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM0 5h1v1h-1zM1 5h1v1h-1zM10 5h1v1h-1zM11 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM10 6h1v1h-1zM11 6h1v1h-1zM1 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM10 8h1v1h-1zM0 9h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM1 10h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM2 11h1v1h-1zM4 11h1v1h-1zM7 11h1v1h-1zM9 11h1v1h-1z"/></svg></a>
         <button class="snd-btn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span>点我开声音</span></button>
       </header>
 
@@ -47,9 +62,9 @@
 
           <div class="hero-panel">
             <p class="eyebrow">VOL.1 · 1,409,404 SPRITES</p>
-            <h1>PIXEL<br />ATLAS</h1>
+            <div class="hero-lock"><img class="mark" src="/logo.svg" width="96" height="96" alt="" /><h1>PIXEL<br />ATLAS</h1></div>
             <button type="button" class="hero-logo pix" title="回到全图">PIXEL·ATLAS</button>
-            <p class="hero-sub">像素图鉴 · <b>140 万</b>张 16×16 素材</p>
+            <p class="hero-sub">像素星图 · <b>140 万</b>张 16×16 素材</p>
             <p class="hero-intro">每一格是一张素材，按平均色住在自己颜色的陆地上：灰色聚成中间的岛，彩色按色相围成一圈。暖色的陆地最大，因为游戏世界里最多的是木头、皮革和火光。</p>
             <form class="hero-search" autocomplete="off" role="search">
               <span class="pix" aria-hidden="true">&gt;</span>
@@ -274,12 +289,17 @@
                 <p>素材来自 Angais/pixel-art-atlas-1.4m，以 CC0 发布，但只覆盖原作者能放弃的权利；它由 Krea 2 生成，商用仍受 Krea 社区许可约束。我们加的排列、色彩索引和中文翻译用 CC BY 4.0，网站代码用 MPL-2.0。AI 生成的形象可能近似现有作品，商用前请自查商标。本站非原数据集官方。</p>
               </article>
             </div>
+            <nav class="outro-links pix" aria-label="仓库与反馈">
+              <a href="https://github.com/polang233/pixel-atlas" target="_blank" rel="noopener">GitHub 仓库 ↗</a>
+              <a href="https://github.com/polang233/pixel-atlas/issues" target="_blank" rel="noopener">反馈和问题 ↗</a>
+              <a href="https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m" target="_blank" rel="noopener">原数据集 ↗</a>
+            </nav>
             <button type="button" class="outro-search pix">回到星图搜索 ↖</button>
           </div>
         </section>
       </main>
 
-      <div class="boot pix" aria-live="polite"><p>PIXEL·ATLAS</p><i></i><span>正在把 140 万张素材排成一颗星球…</span></div>
+      <div class="boot pix" aria-live="polite"><img class="mark" src="/logo.svg" width="64" height="64" alt="" /><p>PIXEL·ATLAS</p><i></i><span>正在把 140 万张素材排成一颗星球…</span></div>
       <canvas id="fx" aria-hidden="true"></canvas>
       <div class="slash" aria-hidden="true"><i></i></div>
 

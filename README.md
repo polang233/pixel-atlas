@@ -1,13 +1,22 @@
+<p align="center">
+  <img src="docs/readme-banner.png" alt="Pixel Atlas · 像素星图 — Every pixel a star" width="100%" />
+</p>
+
 # Pixel Atlas · 像素星图
 
-**1.4 million pixel-art sprites, mapped into a world you can explore.**
-*Every pixel a star.*
+**Millions of pixel-art resources, in one place.**
 
-Pixel Atlas lays out every 16×16 sprite of [Angais/pixel-art-atlas-1.4m](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m) on one zoomable map, sorted by colour, so you can fly from orbit down to a single sprite. Around it are themed worlds with small playable retro games and short pieces on pixel art: colour depth, palettes, squash and stretch.
+It starts with every 16×16 sprite of [Angais/pixel-art-atlas-1.4m](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m) laid out on one zoomable map and sorted by colour, so you can fly from orbit down to a single sprite. Around it are themed worlds with small playable retro games and short pieces on pixel art: colour depth, palettes, squash and stretch.
 
-Status: work in progress. Site: <https://pixelatlas.org> (not live yet).
+Live at <https://pixelatlas.org>. Still a work in progress.
 
 > Pixel Atlas is an independent project. It is not made by, or affiliated with, the author of the original dataset.
+
+## What is in it
+
+- **The map.** All 1,409,404 sprites on one zoomable world, split into eight lands by average colour. Zoom out and the lands close up into a planet.
+- **Search.** Type a subject or a colour, in English or Chinese (`slime`, `蓝色宝箱`, `#ff4d6d`); the matches gather in front of you, and each one can fly you to its home on the map.
+- **Worlds.** Themed chapters with small playable retro games and short pieces on pixel-art craft.
 
 ## Run it locally
 
@@ -32,3 +41,7 @@ The sprites were generated with Krea 2. CC0 does not override the Krea 2 Communi
 
 - Sprites: [Angais/pixel-art-atlas-1.4m](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m)
 - Pixel fonts: Fusion Pixel (OFL-1.1, see `public/fonts/OFL-fusion-pixel.txt`), Press Start 2P and Silkscreen (OFL-1.1, via Fontsource)
+
+## Feedback
+
+Bugs and ideas are welcome in [issues](https://github.com/polang233/pixel-atlas/issues). Updates are posted on X: [@polang233](https://x.com/polang233).
