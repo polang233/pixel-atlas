@@ -1,0 +1,92 @@
+/* ===== 05 OCEAN ===== */
+.ch-ocean {
+  background: #02040a;
+}
+.oc-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+/* Anchored to the bottom, not centred: the waterline is 41 % of the way down, and the dune and
+   the palms stand on the left above it. The panel sits in the water under them. */
+.oc-copy {
+  position: absolute;
+  left: 6vw;
+  bottom: max(7vh, 64px);
+  max-width: 28em;
+  pointer-events: none;
+  background: rgb(2 10 24 / 0.62);
+  padding: 18px 22px;
+  border-left: 4px solid #9ff0ff;
+}
+/* the title also shrinks with the height: on a short wide window it would push the panel up over the beach */
+.oc-copy h2 {
+  font-size: clamp(44px, min(6.5vw, 9vh), 92px);
+  color: #c8f4ff;
+  text-shadow: 4px 4px 0 rgb(0 20 40 / 0.6);
+  margin: 8px 0 14px;
+}
+.oc-zone {
+  font-size: 20px;
+  color: #9ff0ff;
+}
+.oc-desc {
+  min-height: 5.4em;
+  margin-top: 6px;
+}
+.oc-copy .world-hint,
+.oc-copy .dim {
+  color: #9fc3d6;
+}
+.ch-ocean[data-zone='2'] .oc-copy h2,
+.ch-ocean[data-zone='3'] .oc-copy h2 {
+  color: #6fe3ff;
+  text-shadow: 0 0 20px rgb(80 220 255 / 0.6);
+}
+.oc-meter {
+  position: absolute;
+  right: 70px;
+  top: 14vh;
+  bottom: 14vh;
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  pointer-events: none;
+  font-size: 12px;
+  color: #9fc3d6;
+}
+.oc-ruler {
+  position: relative;
+  flex: 1;
+  width: 4px;
+  background: rgb(159 195 214 / 0.5);
+  box-shadow: 0 0 0 2px rgb(2 10 24 / 0.5);
+}
+.oc-ruler span {
+  background: rgb(2 10 24 / 0.6);
+  padding: 1px 4px;
+}
+.oc-ruler span {
+  position: absolute;
+  left: 12px;
+  translate: 0 -50%;
+  white-space: nowrap;
+}
+.oc-marker {
+  position: absolute;
+  left: -6px;
+  width: 16px;
+  height: 4px;
+  background: #9ff0ff;
+  box-shadow: 0 0 8px #9ff0ff;
+  translate: 0 -50%;
+}
+.oc-depth {
+  margin-top: 12px;
+  font-weight: 400;
+  font-size: 16px;
+  color: #e8fbff;
+}

@@ -1,0 +1,368 @@
+/* ---------- small screens ----------
+ * Three conditions, used here and in the workshop and outro files:
+ *   chrome   (max-width: 820px)
+ *            compact top bar, world bar and HUD type. Width only.
+ *   phone    (max-width: 820px) and (orientation: portrait), (max-width: 639px)
+ *            stacked layouts: scene on top, copy underneath, game HUD at the top.
+ *   compact  landscape windows from 640px wide that are narrow (≤ 1100px) or short (≤ 700px)
+ *            the copy keeps a slim left column, scaled down, and the scene keeps the rest.
+ */
+
+/* 7vh alone slips under the world bar once the window is shorter than about 900px */
+.neon-copy {
+  bottom: max(7vh, 64px);
+}
+
+/* ---------- compact: worlds stay side by side ---------- */
+@media (min-width: 640px) and (max-width: 1100px) and (orientation: landscape), (min-width: 640px) and (max-height: 700px) and (orientation: landscape) {
+  .chapter {
+    --copy-w: clamp(280px, 40vw, 340px);
+    --copy-x: clamp(16px, 2.6vw, 28px);
+  }
+  .chapter .world-copy h2 {
+    font-size: clamp(30px, min(5.2vw, 7.5vh), 52px);
+    margin: 8px 0 10px;
+  }
+  .chapter .world-copy p {
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .chapter .world-copy .eyebrow {
+    font-size: 12px;
+  }
+  .chapter .world-copy .oc-zone {
+    font-size: 16px;
+  }
+  .world-hint,
+  .fx-row {
+    margin-top: 10px;
+  }
+  .world-actions {
+    margin-top: 12px;
+  }
+  .cart-copy {
+    left: var(--copy-x);
+    width: var(--copy-w);
+  }
+  .bn-stage {
+    left: calc(var(--copy-w) + var(--copy-x) * 2);
+  }
+  .dungeon-copy {
+    left: var(--copy-x);
+    bottom: max(11vh, 64px);
+    max-width: var(--copy-w);
+  }
+  .oc-copy {
+    left: var(--copy-x);
+    width: var(--copy-w);
+    max-width: none;
+    padding: 14px 16px;
+  }
+  .oc-desc {
+    min-height: 4.95em;
+  }
+  .oc-meter {
+    right: 36px;
+  }
+  .neon-copy {
+    left: var(--copy-x);
+    max-width: var(--copy-w);
+    padding: 14px 16px;
+  }
+  /* nudged up: the last world also carries the "next stop" bar above the world bar */
+  .cth-copy {
+    left: var(--copy-x);
+    top: calc(50% - 14px);
+    max-width: var(--copy-w);
+  }
+  .san {
+    margin: 14px 0 8px;
+  }
+  .san-bar {
+    width: 160px;
+  }
+}
+/* compact and tight: one size down */
+@media (min-width: 640px) and (max-width: 820px) and (orientation: landscape), (min-width: 640px) and (max-height: 680px) and (orientation: landscape) {
+  .chapter .world-copy p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+}
+/* compact: the merge ladder is the first thing to go when the column runs out of height */
+@media (min-width: 640px) and (max-width: 1100px) and (max-height: 760px) and (orientation: landscape),
+  (min-width: 640px) and (max-height: 700px) and (orientation: landscape) {
+  .bn-ladder {
+    display: none;
+  }
+}
+@media (min-width: 640px) and (max-height: 620px) and (orientation: landscape) {
+  .game-howto {
+    display: none;
+  }
+}
+@media (min-width: 640px) and (max-height: 480px) and (orientation: landscape) {
+  .chapter .world-copy h2 {
+    font-size: 28px;
+    margin: 4px 0 6px;
+  }
+  .world-copy > p:not([class]),
+  .oc-desc {
+    display: none;
+  }
+}
+
+/* ---------- Bounce stacks only where there is no room beside the copy ---------- */
+@media (max-width: 1100px) and (orientation: portrait), (max-width: 639px) {
+  .bn-stage {
+    inset: 56px 0 auto 0;
+    height: 44%;
+    border-left: 0;
+    border-bottom: 3px solid #1a1228;
+  }
+  .ch-cart.is-playing .bn-stage {
+    inset: 56px 0 0 0;
+    height: auto;
+  }
+  .bn-ladder {
+    display: none;
+  }
+  .cart-copy {
+    top: auto;
+    bottom: 70px;
+    translate: none;
+    width: auto;
+    right: 5vw;
+  }
+}
+
+/* ---------- chrome: compact bars, by width alone ---------- */
+@media (max-width: 820px) {
+  .topbar {
+    gap: 10px;
+    padding: 0 10px;
+    height: 50px;
+  }
+  .logo {
+    display: none;
+  }
+  .topnav {
+    margin: 0;
+    flex: 1;
+    justify-content: space-between;
+  }
+  .topnav button {
+    padding: 6px 7px;
+    font-size: 13px;
+  }
+  .snd-btn span {
+    display: none;
+  }
+  .hint {
+    display: none;
+  }
+  .worldbar {
+    bottom: 8px;
+    max-width: calc(100% - 16px);
+  }
+  .worldbar button {
+    padding: 6px 7px;
+  }
+  /* .worldbar button sets display, so this needs the extra class to win */
+  .worldbar .wb-step {
+    display: none;
+  }
+  .worldbar button b {
+    display: none;
+  }
+  /* wraps instead of running off the edge when the score line is longer than a phone is wide */
+  .game-hud {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    font-size: 12px;
+  }
+  .g-title {
+    display: none;
+  }
+
+  .hero-panel {
+    left: 16px;
+    top: 60px;
+    gap: 8px;
+  }
+  .hero-panel h1 {
+    font-size: 30px;
+  }
+  .hero-sub {
+    font-size: 16px;
+  }
+  .hero-intro {
+    display: none;
+  }
+  .hero-tray {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .hero-card {
+    left: 16px;
+    right: 16px;
+    top: auto;
+    bottom: 56px;
+    translate: none;
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 12px;
+    gap: 8px 12px;
+  }
+  .hero-card canvas {
+    width: 72px;
+  }
+  .hero-card .cap {
+    flex: 1;
+    font-size: 14px;
+    min-width: 0;
+  }
+  .hero-card .meta {
+    width: 100%;
+  }
+  .hero-lod {
+    display: none;
+  }
+  .hero-hint {
+    bottom: 24px;
+    left: 12px;
+    translate: none;
+    font-size: 12px;
+    white-space: normal;
+    text-align: left;
+    width: calc(100% - 76px);
+  }
+  .hero-zoom {
+    right: 12px;
+    bottom: 96px;
+  }
+  .hero-zoom button {
+    width: 36px;
+    height: 36px;
+  }
+  .hero-subjects .chip:nth-child(n + 4),
+  .tray-item:nth-child(n + 7),
+  .hero-suggest .chip:nth-child(n + 6) {
+    display: none;
+  }
+  .hero-step .dim {
+    display: none;
+  }
+
+  .cth-play {
+    inset: 96px 0 20px;
+  }
+  .nextbar {
+    bottom: 12px;
+    max-width: calc(100% - 16px);
+  }
+  body[data-area='worlds'] .nextbar {
+    bottom: 52px;
+  }
+  .nb-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* ---------- phone: stacked layouts ---------- */
+@media (max-width: 820px) and (orientation: portrait), (max-width: 639px) {
+  .game-hud {
+    top: 56px;
+    bottom: auto;
+  }
+  .game-howto {
+    display: none;
+  }
+  .chapter p {
+    font-size: 14px;
+  }
+  .chapter h2 {
+    font-size: 40px;
+    margin: 10px 0 12px;
+  }
+
+  .dungeon-copy,
+  .cth-copy,
+  .oc-copy {
+    left: 16px;
+    right: 16px;
+  }
+  .cth-copy {
+    top: auto;
+    bottom: 112px;
+    translate: none;
+  }
+  .cth-field {
+    right: -40vw;
+    top: 30%;
+  }
+  .oc-copy {
+    top: auto;
+    bottom: 56px;
+    translate: none;
+  }
+  .oc-desc {
+    min-height: 0;
+  }
+  /* short enough to end above the copy panel, which sits at the bottom here */
+  .oc-meter {
+    right: 16px;
+    width: 64px;
+    top: 70px;
+    bottom: auto;
+    height: 28vh;
+  }
+  .neon-copy {
+    left: 12px;
+    right: 12px;
+    bottom: 52px;
+    padding: 12px 14px;
+  }
+  .neon-copy p:first-of-type {
+    display: none;
+  }
+  .cart-copy p:not(.eyebrow):not(.game-howto):not(.world-hint) {
+    display: none;
+  }
+  .cart-copy {
+    bottom: 110px;
+  }
+  .dungeon-copy p:not(.eyebrow):not(.world-hint) {
+    display: none;
+  }
+  .ch-cart .world-copy h2 {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 820px) and (orientation: portrait) and (max-height: 740px), (max-width: 639px) and (max-height: 740px) {
+  /* short phones: the zone line stays, the paragraph would push the panel up into the depth gauge */
+  .oc-desc {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-hint {
+    transition: none;
+  }
+  .snd-btn.is-locked,
+  .hero-reticle,
+  .neon-copy h2,
+  .game-start,
+  .nb-arrow,
+  .cth-say {
+    animation: none;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}

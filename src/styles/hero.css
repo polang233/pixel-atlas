@@ -1,0 +1,416 @@
+/* ===== 00 HERO ===== */
+.ch-hero {
+  background: var(--ink);
+}
+.hero-gl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.hero-gl.is-grabbing {
+  cursor: grabbing;
+}
+
+.hero-panel {
+  position: absolute;
+  left: 4vw;
+  top: 72px;
+  width: min(440px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+.hero-panel > * {
+  pointer-events: auto;
+}
+.hero-panel h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(34px, 5.4vw, 76px);
+  line-height: 1.05;
+  margin: 4px 0 0;
+  text-shadow: 5px 5px 0 #000;
+  pointer-events: none;
+  transition: font-size 0.3s steps(4);
+}
+.hero-sub {
+  font-family: var(--pixel);
+  font-size: 20px;
+  text-shadow: 2px 2px 0 #000;
+}
+.hero-sub b {
+  color: var(--gold);
+  font-weight: 400;
+}
+.hero-intro {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #cfc8db;
+  text-shadow: 0 1px 0 #000;
+  max-width: 30em;
+}
+.ch-hero.is-deep .hero-panel h1 {
+  font-size: 28px;
+}
+.ch-hero.is-deep .hero-intro,
+.ch-hero.is-searching .hero-intro {
+  display: none;
+}
+.ch-hero.is-deep .hero-panel {
+  background: var(--panel);
+  border: 2px solid rgb(255 255 255 / 0.18);
+  padding: 14px;
+  backdrop-filter: blur(6px);
+}
+.hero-panel {
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.hero-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 3px solid var(--paper);
+  padding: 4px 4px 4px 14px;
+  box-shadow: 6px 6px 0 #000;
+  backdrop-filter: blur(6px);
+}
+.hero-search:focus-within {
+  border-color: var(--gold);
+  box-shadow: 6px 6px 0 var(--gold);
+}
+.hero-search > span {
+  color: var(--gold);
+}
+.hero-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  color: var(--paper);
+  outline: none;
+  font-family: var(--pixel);
+  font-size: 16px;
+  padding: 10px 0;
+}
+.hero-search input::placeholder {
+  color: #6f6880;
+}
+.hero-search input::-webkit-search-cancel-button {
+  filter: invert(1);
+}
+.dice {
+  background: var(--paper);
+  color: var(--ink);
+  border: 0;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.dice:hover {
+  background: var(--gold);
+}
+.hero-suggest,
+.hero-subjects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.hero-suggest[hidden] {
+  display: none;
+}
+.hero-suggest .chip,
+.hero-subjects .chip {
+  background: var(--panel);
+}
+.hero-status {
+  font-size: 12px;
+  color: #d9d2e6;
+  text-shadow: 1px 1px 0 #000;
+  min-height: 1em;
+}
+.hero-status:empty {
+  display: none;
+}
+.hero-status b {
+  color: var(--gold);
+  font-weight: 400;
+}
+.hero-tray {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.hero-tray:empty {
+  display: none;
+}
+.tray-item {
+  aspect-ratio: 1;
+  background: var(--panel);
+  border: 2px solid rgb(255 255 255 / 0.15);
+  cursor: pointer;
+  padding: 6px;
+  transition:
+    transform 0.1s steps(2),
+    border-color 0.1s;
+}
+.tray-item:hover {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+}
+.tray-item canvas {
+  width: 100%;
+  height: 100%;
+}
+.hero-step {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.hero-step[hidden],
+.hero-step [data-act='batch'][hidden] {
+  display: none;
+}
+
+.hero-reticle,
+.hero-hover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transform-origin: center;
+}
+.hero-reticle[hidden],
+.hero-hover[hidden],
+.hero-loupe[hidden],
+.hero-tip[hidden] {
+  display: none;
+}
+.hero-hover {
+  outline: 2px solid rgb(255 255 255 / 0.6);
+}
+/* The lens redraws the cells around the pointer in place, so it sits directly on the map (it follows the canvas in
+   the markup) and under every other overlay. No z-index: the reticle, tooltip and panels must stay above it. */
+.hero-loupe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+.hero-reticle i {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 3px solid var(--gold);
+}
+.hero-reticle i:nth-child(1) {
+  left: 0;
+  top: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+.hero-reticle i:nth-child(2) {
+  right: 0;
+  top: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+.hero-reticle i:nth-child(3) {
+  left: 0;
+  bottom: 0;
+  border-right: 0;
+  border-top: 0;
+}
+.hero-reticle i:nth-child(4) {
+  right: 0;
+  bottom: 0;
+  border-left: 0;
+  border-top: 0;
+}
+.hero-reticle {
+  animation: pulse 0.9s steps(2) infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+.hero-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 280px;
+  z-index: 6;
+  pointer-events: none;
+  background: #15121c;
+  border: 2px solid var(--paper);
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.hero-card {
+  position: absolute;
+  right: 64px;
+  top: 54%;
+  translate: 0 -50%;
+  width: 260px;
+  z-index: 5;
+  background: var(--panel);
+  border: 3px solid var(--paper);
+  box-shadow: 8px 8px 0 #000;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(6px);
+}
+.hero-card[hidden] {
+  display: none;
+}
+.hero-card canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  background: repeating-conic-gradient(#1a1724 0 25%, #14121c 0 50%) 0 0 / 12.5% 12.5%;
+}
+.hero-card .cap {
+  font-size: 16px;
+  line-height: 1.45;
+}
+.hero-card .meta {
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+.hero-card .meta b {
+  color: var(--paper);
+  font-weight: 400;
+  font-family: var(--pixel);
+}
+.hero-card .btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.card-x {
+  position: absolute;
+  right: 6px;
+  top: 2px;
+  background: none;
+  border: 0;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--dim);
+}
+
+.hero-lod {
+  position: absolute;
+  right: 64px;
+  top: 64px;
+  font-size: 12px;
+  color: var(--dim);
+  text-align: right;
+  pointer-events: none;
+  background: rgb(7 6 12 / 0.7);
+  padding: 8px 10px;
+}
+.hero-lod ol {
+  list-style: none;
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+  justify-content: flex-end;
+}
+.hero-lod button {
+  pointer-events: auto;
+  padding: 3px 7px;
+  background: none;
+  border: 2px solid #3a3548;
+  cursor: pointer;
+  transition: transform 0.1s steps(2);
+}
+.hero-lod button:hover {
+  color: var(--paper);
+  border-color: var(--paper);
+  transform: translate(-2px, -2px);
+  box-shadow: 2px 2px 0 #000;
+}
+.hero-lod button[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.hero-lod button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.hero-lod button[aria-pressed='true']:focus-visible {
+  outline-color: var(--paper);
+}
+.hero-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 66px;
+  translate: -50% 0;
+  font-size: 12px;
+  color: #d9d2e6;
+  pointer-events: none;
+  white-space: nowrap;
+  background: rgb(7 6 12 / 0.7);
+  padding: 6px 10px;
+  transition: opacity 0.3s steps(3);
+}
+.hero-hint.is-dismissed {
+  opacity: 0;
+}
+.hero-hint[hidden] {
+  display: none;
+}
+.hero-zoom {
+  position: absolute;
+  right: 24px;
+  bottom: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 4;
+}
+.hero-zoom button {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+  background: var(--panel);
+  color: var(--paper);
+  border: 2px solid rgb(255 255 255 / 0.3);
+  font-family: var(--display);
+}
+.hero-zoom button[data-view='planet'] {
+  font-size: 16px;
+}
+.hero-zoom button[data-view='home'] {
+  font-size: 14px;
+}
+.hero-zoom button:hover {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold);
+}
+.hero-gl.is-rim {
+  cursor: alias;
+}
+.hero-gl.is-rotating {
+  cursor: ew-resize;
+}

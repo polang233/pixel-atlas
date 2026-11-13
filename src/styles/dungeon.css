@@ -1,0 +1,112 @@
+/* ===== 04 DUNGEON ===== */
+.ch-dungeon {
+  background: #0b0a10;
+  cursor: crosshair;
+}
+.dungeon-floor {
+  position: absolute;
+  inset: -40px;
+}
+.dungeon-floor .spr,
+.dungeon-planted .spr {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  image-rendering: pixelated;
+  cursor: help;
+  filter: drop-shadow(0 6px 0 rgb(0 0 0 / 0.5));
+}
+.dungeon-planted {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.dungeon-planted .spr {
+  width: 64px;
+  height: 64px;
+  animation: plant 0.25s steps(3);
+}
+@keyframes plant {
+  from {
+    translate: 0 -16px;
+    opacity: 0;
+  }
+}
+.dungeon-dark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  image-rendering: auto;
+}
+.dungeon-copy {
+  position: absolute;
+  left: 6vw;
+  bottom: 11vh;
+  max-width: 30em;
+  pointer-events: none;
+  text-shadow: 0 2px 0 #000;
+}
+.dungeon-game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  cursor: crosshair;
+  touch-action: none;
+}
+.dungeon-game[hidden] {
+  display: none;
+}
+.dungeon-say {
+  position: absolute;
+  left: 50%;
+  top: 76px;
+  translate: -50% 0;
+  z-index: 5;
+  font-size: 14px !important;
+  white-space: nowrap;
+  max-width: none !important;
+  background: #1b1410;
+  color: #ffd9a0;
+  border: 2px solid #ffb347;
+  padding: 6px 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s steps(3);
+}
+.ch-dungeon.is-playing .dungeon-say.on {
+  opacity: 1;
+}
+.ch-dungeon.is-playing .dungeon-floor,
+.ch-dungeon.is-playing .dungeon-planted,
+.ch-dungeon.is-playing .dungeon-dark {
+  visibility: hidden;
+}
+.dungeon-copy h2 {
+  color: #ffb347;
+  text-shadow:
+    0 0 24px rgb(255 140 40 / 0.5),
+    5px 5px 0 #000;
+}
+.dungeon-copy b {
+  color: #ffb347;
+  font-weight: 600;
+}
+.dungeon-copy .world-hint {
+  color: #c9a57a;
+}
+.dungeon-tip {
+  position: absolute;
+  z-index: 5;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: #1b1410;
+  color: #ffd9a0;
+  border: 2px solid #ffb347;
+  pointer-events: none;
+  opacity: 0;
+  max-width: 260px;
+}

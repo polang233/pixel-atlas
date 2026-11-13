@@ -1,0 +1,27 @@
+/* ---------- chapters ---------- */
+#stage {
+  position: absolute;
+  inset: 0;
+}
+.chapter {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.chapter.is-active {
+  visibility: visible;
+  pointer-events: auto;
+}
+.chapter h2 {
+  font-size: clamp(44px, 6.5vw, 92px);
+  line-height: 1;
+  margin: 16px 0 20px;
+  font-weight: 400;
+}
+.chapter p {
+  max-width: 34em;
+  line-height: 1.75;
+  font-size: 16px;
+}

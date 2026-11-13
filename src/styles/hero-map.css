@@ -1,0 +1,177 @@
+/* ===== hero as a world map: the title plate, legend, breadcrumb, place names ===== */
+.hero-panel {
+  left: 20px;
+  top: 68px;
+  width: min(400px, calc(100% - 40px));
+  gap: 10px;
+  padding: 16px 18px;
+  background: #0b0f26;
+  border: 3px solid var(--paper);
+  box-shadow:
+    0 0 0 3px #0b0f26,
+    6px 6px 0 3px #000;
+  pointer-events: auto;
+  max-height: calc(100% - 150px);
+}
+.hero-panel h1 {
+  font-size: clamp(30px, 3.6vw, 50px);
+  text-shadow: 4px 4px 0 #000;
+  color: #ffe9a8;
+}
+.hero-sub {
+  font-size: 15px;
+}
+.hero-intro {
+  font-size: 13px;
+}
+.hero-logo {
+  display: none;
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: #ffe9a8;
+  cursor: pointer;
+}
+.hero-logo:hover {
+  color: #fff;
+}
+.hero-crumb {
+  display: none;
+  margin: 0;
+  font-size: 12px;
+  color: #8f9ac4;
+}
+.hero-crumb button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #cfd6f0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.hero-crumb b {
+  color: var(--gold);
+  font-weight: 400;
+}
+.hero-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 12px;
+}
+.hero-legend button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 1px 0;
+  font: inherit;
+  font-size: 12px;
+  color: #cfd6f0;
+  cursor: pointer;
+  text-align: left;
+}
+.hero-legend button:hover {
+  color: #fff;
+}
+.hero-legend i {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  box-shadow:
+    0 0 0 1px #000,
+    inset 2px 2px 0 rgb(255 255 255 / 0.3);
+}
+.hero-legend small {
+  margin-left: auto;
+  color: #8f9ac4;
+}
+/* exploring: the plate folds to one line */
+.ch-hero.is-exploring .hero-panel {
+  padding: 10px 12px;
+  gap: 8px;
+}
+.ch-hero.is-exploring .hero-panel > .eyebrow,
+.ch-hero.is-exploring .hero-panel h1,
+.ch-hero.is-exploring .hero-sub,
+.ch-hero.is-exploring .hero-intro,
+.ch-hero.is-exploring .hero-suggest {
+  display: none;
+}
+.ch-hero.is-exploring .hero-logo,
+.ch-hero.is-exploring .hero-crumb {
+  display: block;
+}
+.ch-hero.is-exploring .hero-legend {
+  grid-template-columns: repeat(8, auto);
+  justify-content: start;
+  gap: 6px;
+}
+.ch-hero.is-exploring .hero-legend span,
+.ch-hero.is-exploring .hero-legend small {
+  display: none;
+}
+.ch-hero.is-searching .hero-legend {
+  display: none;
+}
+.ch-hero.is-deep .hero-panel {
+  background: #0b0f26;
+  border: 3px solid var(--paper);
+  padding: 10px 12px;
+  backdrop-filter: none;
+}
+.hero-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.hero-labels span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 1px 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  background: rgb(8 10 28 / 0.84);
+  border: 2px solid currentColor;
+  box-shadow: 2px 2px 0 #000;
+  transition: opacity 0.2s steps(3);
+}
+.hero-labels small {
+  display: block;
+  font-size: 10px;
+  color: #b9c4e6;
+  text-align: center;
+}
+html.bare .hero-labels {
+  display: block !important;
+}
+@media (max-width: 760px) {
+  .hero-panel {
+    left: 10px;
+    top: 56px;
+    width: calc(100% - 20px);
+    padding: 10px 12px;
+  }
+  .hero-legend {
+    grid-template-columns: repeat(4, auto);
+    justify-content: start;
+    gap: 6px 10px;
+  }
+  .hero-legend small {
+    display: none;
+  }
+  .hero-labels span {
+    font-size: 11px;
+  }
+  .hero-labels small {
+    display: none;
+  }
+}

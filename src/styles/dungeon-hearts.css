@@ -1,0 +1,19 @@
+/* dungeon crawl hearts */
+.g-extra .hp {
+  display: inline-flex;
+  gap: 3px;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+.g-extra .hp i {
+  width: 10px;
+  height: 10px;
+  background: #3a2030;
+  box-shadow: inset 0 0 0 2px #1a0f18;
+}
+.g-extra .hp i.on {
+  background: #ff4d6d;
+  box-shadow:
+    inset 2px 2px 0 #ff9fb0,
+    inset -2px -2px 0 #b3203c;
+}

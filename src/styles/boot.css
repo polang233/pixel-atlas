@@ -1,0 +1,63 @@
+/* ---------- boot screen ---------- */
+.boot {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  font-size: 12px;
+  color: var(--dim);
+  transition:
+    opacity 0.3s steps(3),
+    visibility 0.3s;
+}
+.boot p {
+  font-family: var(--display);
+  color: var(--paper);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+}
+.boot i {
+  width: 160px;
+  height: 12px;
+  border: 2px solid var(--paper);
+  position: relative;
+  overflow: hidden;
+}
+.boot i::after {
+  content: '';
+  position: absolute;
+  inset: 2px auto 2px 2px;
+  width: 30%;
+  background: var(--gold);
+  animation: boot 1.2s steps(8) infinite;
+}
+@keyframes boot {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 340% 0;
+  }
+}
+.is-ready .boot {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ?bare — canvas only, used by the ring style preview */
+html.bare .topnav,
+html.bare .nextbar,
+html.bare .hint,
+html.bare .worldbar,
+html.bare .ch-hero > :not(.hero-gl) {
+  display: none !important;
+}
+html.bare .snd-btn {
+  display: none !important;
+}

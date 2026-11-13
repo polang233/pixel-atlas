@@ -1,0 +1,39 @@
+/* ===== logo mark: a 32-cell pixel grid, only ever shown at whole multiples of 32px ===== */
+.mark {
+  display: block;
+  flex: none;
+  image-rendering: pixelated;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo b {
+  font-weight: 400;
+}
+.hero-lock {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.ch-hero.is-exploring .hero-lock {
+  display: none;
+}
+@media (max-width: 820px) {
+  .logo {
+    display: flex;
+  }
+  .logo b {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .hero-lock {
+    gap: 12px;
+  }
+  .hero-lock .mark {
+    width: 64px;
+    height: 64px;
+  }
+}

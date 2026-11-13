@@ -1,0 +1,451 @@
+/* ===== 08 OUTRO =====
+ * One box that should fit the window without scrolling on a laptop. Sizes come from the
+ * --o-* properties: roomy by default, one step down when the window is under 840px tall,
+ * another under 680px. Cards run three across from 1000px, two across below, one on phones.
+ */
+.ch-outro {
+  background: #f4ecd8;
+  color: #15121c;
+  display: grid;
+  place-items: center;
+  /* clear of the top bar, and of the keyboard hint in the bottom-left corner */
+  padding: 68px 16px 46px;
+}
+.outro-rain {
+  position: absolute;
+  inset: 0;
+}
+.outro-rain img {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  opacity: 0.9;
+}
+.outro-box {
+  --o-pad: 26px 30px;
+  --o-gap: 12px;
+  --o-card-pad: 14px;
+  --o-text: 14px;
+  --o-well: 96px;
+  --o-sprite: 80px;
+  --o-tile: 32px;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'eyebrow eyebrow eyebrow'
+    'title intro intro'
+    'cards cards cards'
+    'links links back';
+  align-items: center;
+  gap: var(--o-gap) 18px;
+  background: #f4ecd8;
+  border: 4px solid #15121c;
+  box-shadow: 10px 10px 0 #15121c;
+  padding: var(--o-pad);
+  width: 100%;
+  max-width: 1080px;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+}
+.outro-box::-webkit-scrollbar {
+  width: 12px;
+}
+.outro-box::-webkit-scrollbar-track {
+  background: repeating-conic-gradient(rgb(21 18 28 / 0.28) 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+}
+.outro-box::-webkit-scrollbar-thumb {
+  background: #15121c;
+  box-shadow:
+    inset 2px 2px 0 #f4ecd8,
+    inset -2px -2px 0 #f4ecd8;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .outro-box {
+    scrollbar-width: thin;
+    scrollbar-color: #15121c #e2d8c0;
+  }
+}
+.outro-box .eyebrow {
+  grid-area: eyebrow;
+  color: #7a7286;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.ch-outro .outro-box h2 {
+  grid-area: title;
+  align-self: baseline;
+  font-size: clamp(36px, 3.4vw, 48px);
+  margin: 0;
+  text-wrap: balance;
+}
+.outro-box .outro-intro {
+  grid-area: intro;
+  align-self: baseline;
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: none;
+  text-wrap: pretty;
+}
+.outro-cards {
+  grid-area: cards;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* "Coming next" moves up beside the first two cards, "All of them" and the licence share the second row */
+  grid-auto-flow: dense;
+  gap: var(--o-gap);
+}
+.outro-card {
+  min-width: 0;
+  border: 3px solid #15121c;
+  padding: var(--o-card-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: var(--o-text);
+  line-height: 1.55;
+  text-wrap: pretty;
+  transition:
+    transform 0.12s steps(2),
+    box-shadow 0.12s steps(2);
+}
+.outro-card:hover,
+.outro-card:focus-within {
+  transform: translate(-3px, -3px);
+  box-shadow: 4px 4px 0 #15121c;
+}
+.outro-card.is-all {
+  grid-column: span 2;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(min-content, 1fr);
+  grid-template-areas:
+    'head head'
+    'desc desc'
+    'formats actions'
+    'code code';
+  align-items: center;
+  gap: 8px 14px;
+}
+.outro-card.is-all > .outro-card-head {
+  grid-area: head;
+}
+.outro-card.is-all > p {
+  grid-area: desc;
+}
+.outro-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.outro-card-head h3 {
+  font-size: 16px;
+  line-height: 1.25;
+  color: #15121c;
+}
+.outro-kicker {
+  font-size: 12px;
+  line-height: 1;
+  color: #7a7286;
+}
+/* The three-column grid shows "Coming next" before "All of them", so their numbers swap with them. */
+.outro-card.is-next .outro-kicker,
+.outro-card.is-all .outro-kicker {
+  font-size: 0;
+}
+.outro-card.is-next .outro-kicker::before {
+  content: '03';
+  font-size: 12px;
+}
+.outro-card.is-all .outro-kicker::before {
+  content: '04';
+  font-size: 12px;
+}
+.outro-box .outro-card p {
+  max-width: none;
+  font-size: var(--o-text);
+  line-height: 1.55;
+}
+.outro-card-content {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.outro-card-copy {
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.outro-card-copy .chip {
+  margin-top: auto;
+  max-width: 100%;
+  text-align: left;
+}
+.outro-sprite {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--o-well);
+  height: var(--o-well);
+  border: 3px solid #15121c;
+  background: #15121c;
+  cursor: pointer;
+}
+.outro-sprite img {
+  width: var(--o-sprite);
+  height: var(--o-sprite);
+  image-rendering: pixelated;
+}
+.outro-sheet {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, var(--o-tile));
+  grid-template-rows: repeat(4, var(--o-tile));
+  width: calc(var(--o-tile) * 4);
+  height: calc(var(--o-tile) * 4);
+  background: #15121c;
+}
+.outro-sheet img {
+  width: var(--o-tile);
+  height: var(--o-tile);
+  image-rendering: pixelated;
+}
+.outro-formats {
+  grid-area: formats;
+  display: flex;
+  gap: 8px;
+}
+.outro-box :focus-visible {
+  outline-color: #15121c;
+}
+.outro-code {
+  grid-area: code;
+  align-self: stretch;
+  min-width: 0;
+  max-width: 100%;
+  background: #15121c;
+  color: var(--gold);
+  font: 12px / 1.7 var(--pixel);
+  padding: 8px 12px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+.outro-code code {
+  font: inherit;
+}
+.outro-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+.outro-copied {
+  min-width: 9ch;
+  min-height: 1.6em;
+  opacity: 0;
+}
+.outro-copied.is-visible {
+  opacity: 1;
+}
+.outro-roadmap {
+  list-style: none;
+  color: #6b6478;
+  display: grid;
+  gap: 6px;
+}
+.outro-roadmap li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+.outro-soon {
+  border: 2px dashed currentColor;
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.outro-licence {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4a4458;
+}
+.outro-licence ul {
+  list-style: none;
+}
+.outro-licence li + li {
+  margin-top: 4px;
+}
+.outro-licence a {
+  align-self: flex-start;
+}
+.outro-box .outro-links {
+  grid-area: links;
+  margin: 0;
+}
+.outro-search {
+  grid-area: back;
+  justify-self: end;
+  /* its gold shadow needs room inside the scroll box */
+  margin: 0 6px 6px 0;
+  font-size: 14px;
+  background: #15121c;
+  color: var(--gold);
+  border: 0;
+  padding: 10px 16px;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 var(--gold);
+}
+.outro-search:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--gold);
+}
+
+/* ---------- under 840px tall: one size down, so a 760px window needs no scrolling ---------- */
+@media (max-height: 839px) {
+  .outro-box {
+    --o-pad: 18px 22px;
+    --o-gap: 10px;
+    --o-card-pad: 12px;
+    --o-text: 13px;
+    --o-well: 64px;
+    --o-sprite: 48px;
+    --o-tile: 24px;
+  }
+  .ch-outro .outro-box h2 {
+    font-size: clamp(30px, 3.2vw, 36px);
+  }
+  .outro-box .outro-intro {
+    font-size: 14px;
+  }
+  .outro-card-content {
+    gap: 10px;
+  }
+}
+@media (max-height: 680px) {
+  .ch-outro {
+    padding-top: 62px;
+    padding-bottom: 50px;
+  }
+  .outro-box {
+    --o-pad: 12px 18px;
+    --o-gap: 8px;
+    --o-card-pad: 10px;
+    box-shadow: 6px 6px 0 #15121c;
+  }
+  .outro-licence {
+    line-height: 1.45;
+  }
+  .outro-licence li + li {
+    margin-top: 2px;
+  }
+  .outro-box .eyebrow {
+    display: none;
+  }
+  .ch-outro .outro-box h2 {
+    font-size: 30px;
+  }
+  .outro-card,
+  .outro-card.is-all {
+    row-gap: 6px;
+  }
+}
+
+/* ---------- under 1000px wide: two columns, in source order ---------- */
+@media (max-width: 999px) {
+  .outro-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+  }
+  .outro-card.is-all {
+    grid-column: 1 / -1;
+  }
+  .outro-card.is-next .outro-kicker,
+  .outro-card.is-all .outro-kicker {
+    font-size: 12px;
+  }
+  .outro-card.is-next .outro-kicker::before,
+  .outro-card.is-all .outro-kicker::before {
+    content: none;
+  }
+}
+@media (max-width: 820px) {
+  /* no keyboard hint down here, and the top bar is 50px */
+  .ch-outro {
+    padding: 58px 12px 22px;
+  }
+  .outro-box {
+    --o-pad: 14px 16px;
+    --o-well: 64px;
+    --o-sprite: 48px;
+    --o-tile: 24px;
+    column-gap: 12px;
+    box-shadow: 8px 8px 0 #15121c;
+  }
+}
+/* a short landscape window: the sheet drops to actual size, which is what buys the most height */
+@media (min-width: 640px) and (max-width: 820px) and (max-height: 700px) and (orientation: landscape) {
+  .outro-box {
+    --o-tile: 16px;
+  }
+}
+
+/* ---------- phone: one column, and the box scrolls ---------- */
+@media (max-width: 820px) and (orientation: portrait), (max-width: 639px) {
+  .outro-box {
+    --o-pad: 20px 18px;
+    --o-gap: 12px;
+    --o-card-pad: 14px;
+    --o-text: 14px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'eyebrow'
+      'title'
+      'intro'
+      'cards'
+      'links'
+      'back';
+  }
+  .outro-box .eyebrow {
+    display: block;
+  }
+  .ch-outro .outro-box h2 {
+    font-size: 36px;
+  }
+  .outro-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .outro-card.is-all {
+    display: flex;
+  }
+  .outro-search {
+    justify-self: start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .outro-card,
+  .outro-box .chip {
+    transition: none;
+  }
+  .outro-card:hover,
+  .outro-card:focus-within,
+  .outro-box .chip:hover,
+  .outro-search:hover {
+    transform: none;
+  }
+}

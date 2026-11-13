@@ -1,0 +1,357 @@
+/* ===== 01 DEPTH ===== */
+.toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  cursor: pointer;
+}
+.toggle input {
+  accent-color: var(--gold);
+}
+
+/* ===== WORLD 01 CART ===== */
+.ch-cart {
+  background: #2a1f3d;
+}
+.bn-stage {
+  position: absolute;
+  inset: 56px 0 0 36%;
+  border-left: 3px solid #1a1228;
+}
+.bn-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  cursor: grab;
+  touch-action: none;
+}
+.bn-canvas:active {
+  cursor: grabbing;
+}
+.ch-cart.is-playing .bn-stage {
+  inset: 56px 0 0 0;
+  border: 0;
+}
+.ch-cart.is-playing .bn-canvas {
+  cursor: crosshair;
+}
+.bn-ladder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  margin-top: 12px;
+}
+.bn-ladder img {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+.bn-ladder i {
+  color: var(--dim);
+  font-style: normal;
+  font-size: 12px;
+}
+.cart-copy {
+  position: absolute;
+  left: 5vw;
+  top: 50%;
+  translate: 0 -50%;
+  width: min(31vw - 24px, 420px);
+}
+.cart-copy h2 {
+  color: #ffb347;
+  text-shadow: 4px 4px 0 #5c2a12;
+}
+.fx-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.fx-row {
+  pointer-events: auto;
+}
+.fx-row .chip {
+  color: #ffb347;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.fx-row .chip[aria-pressed='true'] {
+  background: #ffb347;
+  border-color: #ffb347;
+  color: #2a1408;
+}
+.fx-row .chip[aria-pressed='false'] {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+/* ---------- world copy + mini-game chrome ---------- */
+.world-copy > p:not([class]) {
+  text-wrap: pretty;
+}
+/* plain inline flow: as flex items a hint longer than one line dropped below its own marker */
+.world-hint {
+  font-size: 12px !important;
+  line-height: 1.7 !important;
+  color: var(--dim);
+  margin-top: 12px;
+}
+.world-hint::before {
+  content: '▸';
+  color: var(--gold);
+  margin-right: 6px;
+}
+.world-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  pointer-events: auto;
+}
+.game-start {
+  animation: start-nudge 2.4s steps(1) infinite;
+}
+.game-start:hover {
+  animation: none;
+}
+@keyframes start-nudge {
+  0%,
+  88%,
+  100% {
+    box-shadow: none;
+  }
+  90%,
+  96% {
+    box-shadow: 0 0 0 3px rgb(255 204 77 / 0.35);
+  }
+}
+.fuel {
+  display: inline-block;
+  width: 86px;
+  height: 10px;
+  border: 2px solid #ffb347;
+  padding: 1px;
+  vertical-align: -1px;
+  margin-right: 8px;
+}
+.fuel i {
+  display: block;
+  height: 100%;
+  background: #ffb347;
+}
+.fuel.low {
+  border-color: var(--hot);
+  animation: blink 0.5s steps(1) infinite;
+}
+.fuel.low i {
+  background: var(--hot);
+}
+.game-start {
+  font-size: 14px;
+  padding: 9px 14px;
+}
+.game-howto {
+  font-size: 12px !important;
+  margin-top: 10px;
+  line-height: 1.9 !important;
+}
+.game-howto kbd {
+  font-size: 12px;
+  padding: 0 4px;
+  margin-right: 2px;
+}
+.is-playing .world-copy,
+.is-playing .oc-meter {
+  display: none;
+}
+.game-hud {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: 18px;
+  z-index: 8;
+  /* max-content: left 50% would otherwise cap the bar at half the window and wrap it early */
+  width: max-content;
+  max-width: calc(100% - 16px);
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  font-size: 14px;
+  background: rgb(7 6 12 / 0.82);
+  border: 2px solid rgb(255 255 255 / 0.2);
+  padding: 6px 8px 6px 14px;
+  white-space: nowrap;
+}
+.game-hud[hidden],
+.game-card[hidden] {
+  display: none;
+}
+.game-hud b {
+  color: var(--gold);
+  font-weight: 400;
+}
+.g-title {
+  color: var(--dim);
+}
+.g-extra .san-chip {
+  color: #9fd18b;
+}
+.g-extra .heart {
+  color: #ff4d6d;
+  letter-spacing: 2px;
+}
+.g-quit kbd {
+  font-size: 12px;
+  padding: 0 4px;
+  box-shadow: none;
+  border-width: 1px;
+  margin: 0;
+}
+.game-card {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  background: rgb(7 6 12 / 0.55);
+}
+.game-card-box {
+  background: #15121c;
+  border: 3px solid var(--paper);
+  box-shadow: 10px 10px 0 #000;
+  padding: 26px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(420px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  animation: pop-in 0.25s steps(4);
+}
+.game-card h3 {
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--gold);
+}
+.game-card .g-sub {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #d8d0e6;
+}
+.game-card .g-sub b {
+  font-family: var(--display);
+  color: var(--paper);
+  font-weight: 400;
+  font-size: 18px;
+}
+.g-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.g-btns kbd {
+  font-size: 12px;
+  padding: 0 4px;
+  box-shadow: none;
+  border-width: 1px;
+  margin: 0;
+}
+@keyframes pop-in {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+.game-hud {
+  animation: hud-in 0.25s steps(4);
+}
+@keyframes hud-in {
+  from {
+    translate: -50% 16px;
+    opacity: 0;
+  }
+}
+
+/* ---------- onward: the hand-off between sections ---------- */
+.nextbar {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  bottom: 20px;
+  z-index: 31;
+  cursor: pointer;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--paper);
+  background: rgb(7 6 12 / 0.86);
+  border: 2px solid rgb(255 255 255 / 0.28);
+  padding: 8px 12px;
+  animation: nb-in 0.3s steps(4);
+}
+.nextbar[hidden] {
+  display: none;
+}
+body[data-area='worlds'] .nextbar {
+  bottom: 66px;
+}
+body.is-playing-game .nextbar {
+  display: none;
+}
+.nextbar b {
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--gold);
+  position: relative;
+  z-index: 1;
+}
+.nb-label {
+  color: #cfc8db;
+  position: relative;
+  z-index: 1;
+}
+.nb-arrow {
+  width: 10px;
+  height: 10px;
+  position: relative;
+  z-index: 1;
+  animation: nb-bob 0.9s steps(2) infinite;
+  background: var(--gold);
+  clip-path: polygon(0 20%, 100% 20%, 50% 90%);
+}
+.nextbar[data-dir='-1'] .nb-arrow {
+  rotate: 180deg;
+}
+.nb-fill {
+  position: absolute;
+  inset: 0;
+  background: rgb(255 204 77 / 0.26);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.12s steps(3);
+}
+.nextbar.is-charging {
+  border-color: var(--gold);
+}
+.nextbar:hover {
+  border-color: var(--gold);
+  background: #1b1626;
+}
+@keyframes nb-in {
+  from {
+    translate: -50% 14px;
+    opacity: 0;
+  }
+}
+@keyframes nb-bob {
+  50% {
+    translate: 0 3px;
+  }
+}

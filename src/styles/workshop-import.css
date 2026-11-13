@@ -1,0 +1,59 @@
+/* workshop: colour-depth palette strip and image import */
+.ws-pal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+  max-width: 340px;
+  margin-inline: auto;
+}
+.ws-pal i {
+  width: 16px;
+  height: 16px;
+  box-shadow: 0 0 0 1px #000;
+}
+.ws-pal i.off {
+  opacity: 0.22;
+}
+/* Sixteen swatches to a row whatever the stage width, so the strip never needs more than the
+   three rows the canvas leaves for it. */
+@supports (container-type: size) {
+  .ws-pal {
+    --ws-swatch: min(16px, (100cqw - 46px) / 16);
+    max-width: calc(var(--ws-swatch) * 16 + 46px);
+  }
+  .ws-pal i {
+    width: var(--ws-swatch);
+    height: var(--ws-swatch);
+  }
+}
+.ws-import-row {
+  display: flex;
+  gap: 8px;
+}
+.ch-workshop .ws-import-note {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+}
+.ws-import-note.bad {
+  color: var(--hot);
+}
+.ws-tray button.is-own {
+  border-color: #ffd48a;
+  background: rgb(255 212 138 / 0.12);
+}
+.ch-workshop.is-drop::after {
+  content: attr(data-drop-hint);
+  position: absolute;
+  inset: 70px 20px 20px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  font-family: var(--pixel);
+  font-size: 22px;
+  color: #ffd48a;
+  background: rgb(27 22 38 / 0.86);
+  border: 3px dashed #ffd48a;
+  pointer-events: none;
+}

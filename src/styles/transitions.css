@@ -1,0 +1,18 @@
+/* ---------- transitions ---------- */
+.slash {
+  position: absolute;
+  inset: 0;
+  z-index: 41;
+  pointer-events: none;
+  overflow: hidden;
+  visibility: hidden;
+}
+.slash i {
+  position: absolute;
+  left: -50%;
+  top: -50%;
+  width: 200%;
+  height: 200%;
+  background: var(--slash-color, #0b0a10);
+  transform-origin: center;
+}
