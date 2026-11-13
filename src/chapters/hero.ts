@@ -1,5 +1,5 @@
 /**
- * 00 · 星图. The whole dataset as one colour-wheel planet.
+ * 00 · Atlas. The whole dataset as one colour-wheel planet.
  *
  * Rendering is a tiny virtual-texture system:
  *   LOD0 overview.png  1 texel per sprite (mipmapped)       far away
@@ -10,25 +10,27 @@
  * isn't there yet. Searching, flying and rotating all run on this.
  */
 import gsap from 'gsap'
-import { sound } from '../audio'
 import {
+  type AtlasMeta,
   atlasFetch,
   bytesDownloaded,
+  type CellInfo,
   cellInfo,
+  type LevelMeta,
   loadIndex,
   loadMeta,
   nearestColorCell,
+  type Overview,
   search,
   spriteCanvas,
   tileBitmap,
-  type AtlasMeta,
-  type CellInfo,
-  type LevelMeta,
-  type Overview,
 } from '../atlas'
+import { sound } from '../audio'
+import { escapeHtml, formatCount, formatInt, getLocale, onLocaleChange, t } from '../i18n'
+import { zhLabel } from '../search-zh'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
-import { zhLabel } from '../zh'
+import { zip } from '../zip'
 
 export interface HeroHooks {
   toWorkshop(sprite: HTMLCanvasElement, info: CellInfo): void
@@ -422,7 +424,7 @@ const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
   return t * t * (3 - 2 * t)
 }
-const fmt = (n: number) => n.toLocaleString('en-US')
+const fmt = formatInt
 
 function compile(gl: WebGL2RenderingContext, vs: string, fs: string) {
   const prog = gl.createProgram()!
@@ -608,20 +610,47 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   const tray = $('.hero-tray')
   const suggest = $('.hero-suggest')
   const stepEl = $('.hero-step')
+  const batchButton = $<HTMLButtonElement>('[data-act="batch"]')
   const card = $('.hero-card')
   const cardCanvas = card.querySelector('canvas')!
   const cardCap = card.querySelector<HTMLElement>('.cap')!
   const cardMeta = card.querySelector<HTMLElement>('.meta')!
-  const lodItems = [...el.querySelectorAll<HTMLElement>('.hero-lod li')]
+  const lodButtons = [...el.querySelectorAll<HTMLButtonElement>('.hero-lod [data-lod]')]
+  const viewButton = $<HTMLButtonElement>('[data-zoom="view"]')
   const tech = $('.hero-tech')
   const hint = $('.hero-hint')
   const intro = $('.hero-intro')
   const coarse = matchMedia('(pointer: coarse)')
+  const fine = matchMedia('(pointer: fine)')
   let touch = coarse.matches
   coarse.addEventListener('change', () => (touch = coarse.matches))
+  let hintDismissed = false
+
+  function dismissHint() {
+    if (hintDismissed) return
+    hintDismissed = true
+    hint.classList.add('is-dismissed')
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) hint.hidden = true
+    else window.setTimeout(() => (hint.hidden = true), 300)
+  }
+
+  // The lens sits right above the map and below every other overlay: it redraws the cells around the pointer where they are.
+  const loupe = document.createElement('div')
+  loupe.className = 'hero-loupe'
+  loupe.hidden = true
+  loupe.setAttribute('aria-hidden', 'true')
+  const loupeCanvas = document.createElement('canvas')
+  const loupeCtx = loupeCanvas.getContext('2d')!
+  loupe.append(loupeCanvas)
+  canvas.after(loupe)
+  /** how much the map is dimmed this frame (search results, gather); the lens dims with it */
+  let mapDim = 0
+  /** the cells the search has lit, so the lens can frame them too */
+  let lensHits: Set<number> | null = null
+  let lensHitsVersion = 0
 
   const gl = canvas.getContext('webgl2', { antialias: false, alpha: false })
-  if (!gl) throw new Error('需要 WebGL2')
+  if (!gl) throw new Error(t('hero.webgl'))
 
   // ---- GL setup ---------------------------------------------------------------
   const prog = compile(gl, VERT, FRAG)
@@ -690,21 +719,23 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   const DEG = Math.PI / 180
   const RC = R * 0.62
   const LANDS = [
-    { name: '灰烬之心', note: '灰与黑白', a0: 0, a1: 0, push: 0 },
-    { name: '赤焰群岛', note: '红', a0: 330, a1: 400, push: 0.5 },
-    { name: '赤陶荒原', note: '红棕', a0: 40, a1: 130, push: 0.44 },
-    { name: '琥珀荒原', note: '橙', a0: 130, a1: 205, push: 0.47 },
-    { name: '金穗平原', note: '黄', a0: 205, a1: 232, push: 0.6 },
-    { name: '翡翠森林', note: '绿与青', a0: 232, a1: 258, push: 0.5 },
-    { name: '蓝晶冻原', note: '蓝', a0: 258, a1: 312, push: 0.46 },
-    { name: '紫雾沼泽', note: '紫与粉', a0: 312, a1: 330, push: 0.62 },
+    { name: () => t('land.0.name'), note: () => t('land.0.note'), a0: 0, a1: 0, push: 0 },
+    { name: () => t('land.1.name'), note: () => t('land.1.note'), a0: 330, a1: 400, push: 0.5 },
+    { name: () => t('land.2.name'), note: () => t('land.2.note'), a0: 40, a1: 130, push: 0.44 },
+    { name: () => t('land.3.name'), note: () => t('land.3.note'), a0: 130, a1: 205, push: 0.47 },
+    { name: () => t('land.4.name'), note: () => t('land.4.note'), a0: 205, a1: 232, push: 0.6 },
+    { name: () => t('land.5.name'), note: () => t('land.5.note'), a0: 232, a1: 258, push: 0.5 },
+    { name: () => t('land.6.name'), note: () => t('land.6.note'), a0: 258, a1: 312, push: 0.46 },
+    { name: () => t('land.7.name'), note: () => t('land.7.note'), a0: 312, a1: 330, push: 0.62 },
   ].map((l, k) => {
     const mid = ((l.a0 + l.a1) / 2) * DEG
     const half = ((l.a1 - l.a0) / 2) * DEG
     return { ...l, k, mid, half, ox: k ? Math.cos(mid) * R * l.push : 0, oy: k ? Math.sin(mid) * R * l.push : 0 }
   })
   const secData = new Float32Array(28)
-  LANDS.slice(1).forEach((l, i) => secData.set([l.mid, l.half, l.ox, l.oy], i * 4))
+  LANDS.slice(1).forEach((l, i) => {
+    secData.set([l.mid, l.half, l.ox, l.oy], i * 4)
+  })
   for (const pr of [prog, hitProg]) {
     gl.useProgram(pr)
     gl.uniform4fv(gl.getUniformLocation(pr, 'uSec'), secData)
@@ -819,6 +850,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   function zoomAt(factor: number, sx: number, sy: number) {
     closeGather()
     const nz = Math.min(zMax(), Math.max(zMin(), tgtZ * factor))
+    // This path is used only by wheel, keyboard and zoom-button input.
+    if (nz !== tgtZ) dismissHint()
     if (!anchor || Math.abs(anchor.sx - sx) > 2 || Math.abs(anchor.sy - sy) > 2) {
       const [wx, wy] = toMapPt(sx, sy)
       anchor = { sx, sy, wx, wy }
@@ -826,6 +859,10 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     tgtZ = nz
     flight = null
     lastInput = performance.now()
+  }
+
+  function noteUserZoom(z: number) {
+    if (Math.min(zMax(), Math.max(zMin(), z)) !== cam.z) dismissHint()
   }
 
   /** van Wijk & Nuij smooth zoom-and-pan */
@@ -885,14 +922,21 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   const landInfo = LANDS.map((l) => {
     const cx = l.k ? D + Math.cos(l.mid) * R * 0.82 : D
     const cy = l.k ? D + Math.sin(l.mid) * R * 0.82 : D
-    let r = 0, g = 0, b = 0, n = 0, cells = 0
+    let r = 0,
+      g = 0,
+      b = 0,
+      n = 0,
+      cells = 0
     for (let y = 4; y < SIDE; y += 8)
       for (let x = 4; x < SIDE; x += 8) {
         if (pieceDist(x - D, y - D, l.k) > 0) continue
         cells += 64
         const o = (y * SIDE + x) * 4
         if (!overview.px[o + 3]) continue
-        r += overview.px[o]; g += overview.px[o + 1]; b += overview.px[o + 2]; n++
+        r += overview.px[o]
+        g += overview.px[o + 1]
+        b += overview.px[o + 2]
+        n++
       }
     const m = (r + g + b) / 3 / Math.max(1, n)
     // push the average away from grey so the swatch reads as the land's hue
@@ -904,18 +948,37 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     flyTo(landInfo[k].cx, landInfo[k].cy, zHome() * (k ? 2.6 : 1.9))
     sound.click()
   }
+  const landText: (() => void)[] = []
   LANDS.forEach((l, k) => {
     const b = document.createElement('button')
     b.type = 'button'
-    b.title = `${l.name} · ${l.note}`
-    b.innerHTML = `<i style="background:${landInfo[k].color}"></i><span>${l.name}</span><small>${Math.round(landInfo[k].cells / 1e4)} 万</small>`
+    const swatch = document.createElement('i')
+    swatch.style.background = landInfo[k].color
+    const name = document.createElement('span')
+    const count = document.createElement('small')
+    const update = () => {
+      b.title = `${l.name()} · ${l.note()}`
+      name.textContent = l.name()
+      count.textContent = formatCount(landInfo[k].cells, 'short')
+    }
+    landText.push(update)
+    update()
+    b.append(swatch, name, count)
     b.addEventListener('click', () => flyLand(k))
     legendEl.append(b)
   })
   const labels = LANDS.map((l, k) => {
     const sp = document.createElement('span')
     sp.style.color = landInfo[k].color
-    sp.innerHTML = `${l.name}<small>${l.note} · ${Math.round(landInfo[k].cells / 1e4)} 万张</small>`
+    const name = document.createTextNode('')
+    const detail = document.createElement('small')
+    const update = () => {
+      name.textContent = l.name()
+      detail.textContent = t('hero.landDetail', { note: l.note(), count: formatCount(landInfo[k].cells, 'short') })
+    }
+    landText.push(update)
+    update()
+    sp.append(name, detail)
     labelsEl.append(sp)
     return sp
   })
@@ -944,6 +1007,56 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   const homeY = () => D - (MAP_ON && W < 760 ? (Hh * 0.2) / zHome() : 0)
   const goHome = () => flyTo(homeX(), homeY(), zHome(), undefined, true)
   const goPlanet = () => flyTo(D, D, zMin(), undefined, true)
+  /** the view has left the opening one: zoomed, panned, or folded into the planet */
+  const isAway = () => cam.z > zHome() * 1.22 || cam.z < zHome() * 0.9 || Math.hypot(cam.x - homeX(), cam.y - homeY()) > R * 0.2
+  /** one button, two jobs: from the opening view it folds the planet, from anywhere else it comes back */
+  const viewAction = () => (MAP_ON && !isAway() ? 'planet' : 'home')
+  let viewShown = ''
+  function renderViewButton() {
+    const planet = viewShown === 'planet'
+    viewButton.dataset.view = viewShown
+    viewButton.textContent = planet ? '◐' : '◎'
+    viewButton.title = t(planet ? 'hero.toPlanetTitle' : 'hero.toHomeTitle')
+    viewButton.setAttribute('aria-label', t(planet ? 'hero.toPlanet' : 'hero.toHome'))
+  }
+  function toggleView() {
+    deselect()
+    if (viewAction() === 'planet') {
+      noteUserZoom(zMin())
+      goPlanet()
+    } else {
+      noteUserZoom(zHome())
+      goHome()
+    }
+  }
+  /** the disc point under the view centre; over the sea, the nearest shore, pulled a little inland */
+  function landNear(inland: number): [number, number] {
+    const here = discOf(cam.x, cam.y)
+    if (here) return here
+    const step = Math.max(4, 12 / cam.z)
+    for (let r = step; r < R * 3; r += step)
+      for (let i = 0; i < 24; i++) {
+        const dx = Math.cos((i / 12) * Math.PI)
+        const dy = Math.sin((i / 12) * Math.PI)
+        const shore = discOf(cam.x + dx * r, cam.y + dy * r)
+        if (shore) return discOf(cam.x + dx * (r + inland), cam.y + dy * (r + inland)) ?? shore
+      }
+    return [D, D]
+  }
+  /** a zoom well inside each level of detail; the map level is the opening view */
+  const LOD_Z = [0, 2.6, 7, 20]
+  function goLod(level: number) {
+    deselect()
+    if (!level) {
+      noteUserZoom(zHome())
+      goHome()
+      return
+    }
+    // (from the planet this unfolds the map on the way: the continents part as the zoom passes the opening view)
+    const z = Math.min(zMax(), LOD_Z[level])
+    noteUserZoom(z)
+    flyTo(...landNear((Math.min(W, Hh) * 0.25) / z), z)
+  }
   const cellXY = (cell: number): [number, number] => [(cell % SIDE) + 0.5, Math.floor(cell / SIDE) + 0.5]
   const flyToCell = (cell: number, z = 72) => {
     const [x, y] = cellXY(cell)
@@ -953,6 +1066,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   // ---- selection card ------------------------------------------------------------------
   let selected = -1
   let selInfo: CellInfo | null = null
+  let cardReady = false
   let selSprite: HTMLCanvasElement | null = null
   const cctx = cardCanvas.getContext('2d')!
 
@@ -964,19 +1078,32 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     selected = cell
     sound.select()
     card.hidden = false
+    cardReady = false
+    selInfo = null
+    selSprite = null
     cardCap.textContent = '…'
     cardMeta.textContent = ''
     cctx.clearRect(0, 0, 16, 16)
     const [info, spr] = await Promise.all([cellInfo(cell), spriteCanvas(cell)])
     if (selected !== cell) return
     selInfo = info
+    cardReady = true
     selSprite = spr
     if (spr) cctx.drawImage(spr, 0, 0)
+    renderCard()
+  }
+  function renderCard() {
+    const info = selInfo
     if (info) {
       cardCap.textContent = info.caption
-      const zh = zhLabel(info.subject)
-      cardMeta.innerHTML = `<b>${info.subject}</b>${zh ? ` · ${zh}` : ''}<br>格子 #${fmt(cell)} · 数据集 #${fmt(info.id)}`
-    } else cardCap.textContent = '（空格子）'
+      const zh = getLocale() === 'zh-CN' ? zhLabel(info.subject) : ''
+      cardMeta.innerHTML = t('hero.cardMetaHtml', {
+        subject: escapeHtml(info.subject),
+        translation: zh ? ` · ${escapeHtml(zh)}` : '',
+        cell: fmt(selected),
+        id: fmt(info.id),
+      })
+    } else cardCap.textContent = t('hero.empty')
   }
   function deselect() {
     selected = -1
@@ -994,28 +1121,153 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       input.value = selInfo.subject
       runSearch(true)
     }
-    if (act === 'png' && selSprite && selInfo) {
-      const big = document.createElement('canvas')
-      big.width = big.height = 256
-      const b = big.getContext('2d')!
-      b.imageSmoothingEnabled = false
-      b.drawImage(selSprite, 0, 0, 256, 256)
-      big.toBlob((blob) => {
+    if ((act === 'png' || act === 'png-big') && selSprite && selInfo) {
+      const filename = `pixel-atlas-${selInfo.id}-${slug(selInfo.subject, 'sprite')}${act === 'png-big' ? '-x16' : ''}.png`
+      let output = selSprite
+      if (act === 'png-big') {
+        output = document.createElement('canvas')
+        output.width = output.height = 256
+        const b = output.getContext('2d')!
+        b.imageSmoothingEnabled = false
+        b.drawImage(selSprite, 0, 0, 256, 256)
+      }
+      output.toBlob((blob) => {
         if (!blob) return
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `pixel-atlas-${selInfo!.id}-${selInfo!.subject.replace(/\W+/g, '-')}.png`
-        a.click()
-        setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+        download(blob, filename)
       })
     }
   })
+
+  function slug(value: string, fallback = 'batch') {
+    return (
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40)
+        .replace(/-+$/g, '') || fallback
+    )
+  }
+
+  function download(blob: Blob, filename: string) {
+    const a = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    a.href = url
+    a.download = filename
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  }
 
   // ---- search ----------------------------------------------------------------------------
   let tour: number[] = []
   let tourAt = -1
   let searchSeq = 0
   let indexLoaded = false
+
+  let batchResult: { query: string; english: string; total: number; cells: Uint32Array } | null = null
+  let batchState: { kind: 'idle' } | { kind: 'packing'; n: number; total: number } | { kind: 'failed' } = { kind: 'idle' }
+  let batchJob = 0
+  let batchTimer = 0
+
+  function renderBatch() {
+    batchButton.hidden = !batchResult
+    if (batchState.kind === 'packing') {
+      batchButton.setAttribute('aria-busy', 'true')
+      batchButton.textContent = t('hero.batchProgress', { n: batchState.n, total: batchState.total })
+    } else {
+      batchButton.removeAttribute('aria-busy')
+      batchButton.textContent =
+        batchState.kind === 'failed' ? t('hero.batchFailed') : batchResult && batchResult.total > 256 ? t('hero.batchFirst', { n: 256 }) : t('hero.batch')
+    }
+  }
+
+  function resetBatch() {
+    ++batchJob
+    clearTimeout(batchTimer)
+    batchResult = null
+    batchState = { kind: 'idle' }
+    renderBatch()
+  }
+
+  batchButton.addEventListener('click', async () => {
+    if (!batchResult || batchState.kind === 'packing') return
+    const result = batchResult
+    const job = ++batchJob
+    const cells = result.cells.slice(0, Math.min(256, result.total))
+    const current = () => job === batchJob && batchState.kind === 'packing'
+    clearTimeout(batchTimer)
+    batchState = { kind: 'packing', n: 0, total: cells.length }
+    renderBatch()
+    try {
+      const loaded: ({ sprite: HTMLCanvasElement; info: CellInfo } | null)[] = Array.from({ length: cells.length }, () => null)
+      let next = 0
+      let done = 0
+      // Six workers load one cell at a time; slots preserve the search result order.
+      const worker = async () => {
+        while (current() && next < cells.length) {
+          const i = next++
+          const sprite = await spriteCanvas(cells[i])
+          if (!current()) return
+          const info = sprite ? await cellInfo(cells[i]) : null
+          if (!current()) return
+          if (sprite && info) loaded[i] = { sprite, info }
+          batchState = { kind: 'packing', n: ++done, total: cells.length }
+          renderBatch()
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(6, cells.length) }, worker))
+      if (!current()) return
+      const sprites = loaded.filter((item) => item !== null)
+      if (!sprites.length) throw new Error('No sprites available')
+      const columns = Math.min(16, sprites.length)
+      const sheet = document.createElement('canvas')
+      sheet.width = columns * 16
+      sheet.height = Math.ceil(sprites.length / columns) * 16
+      const ctx = sheet.getContext('2d')!
+      ctx.imageSmoothingEnabled = false
+      const manifest = {
+        generator: 'Pixel Atlas · https://pixelatlas.org',
+        query: result.query,
+        source: 'https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m',
+        licence:
+          'Sprites: CC0 1.0 by Angais, generated with Krea 2 (commercial use is also subject to the Krea 2 Community License). Sheet layout: CC BY 4.0, Pixel Atlas.',
+        tileSize: 16,
+        columns,
+        count: sprites.length,
+        datasetIndexNote: 'datasetIndex is the row in the dataset ZIP (tokens.npy, captions.json, objects.json).',
+        sprites: sprites.map(({ sprite, info }, i) => {
+          const x = (i % columns) * 16
+          const y = Math.floor(i / columns) * 16
+          ctx.drawImage(sprite, x, y)
+          return { x, y, datasetIndex: info.id, subject: info.subject, caption: info.caption }
+        }),
+      }
+      const png = await new Promise<Blob>((resolve, reject) => {
+        sheet.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Cannot encode sprite sheet'))), 'image/png')
+      })
+      if (!current()) return
+      const data = new Uint8Array(await png.arrayBuffer())
+      if (!current()) return
+      const name = slug(result.english || result.query)
+      const archive = zip([
+        { name: `${name}.png`, data },
+        { name: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)) },
+      ])
+      download(archive, `pixel-atlas-${name}.zip`)
+      sound.select()
+      batchState = { kind: 'idle' }
+      renderBatch()
+    } catch {
+      if (!current()) return
+      batchState = { kind: 'failed' }
+      renderBatch()
+      batchTimer = window.setTimeout(() => {
+        if (job !== batchJob) return
+        batchState = { kind: 'idle' }
+        renderBatch()
+      }, 2000)
+    }
+  })
 
   function setHits(cells: Uint32Array | null) {
     const n = cells?.length ?? 0
@@ -1027,11 +1279,20 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     gl!.bindBuffer(gl!.ARRAY_BUFFER, hitBuf)
     gl!.bufferData(gl!.ARRAY_BUFFER, data, gl!.STATIC_DRAW)
     hitCount = n
+    lensHits = n ? new Set(cells) : null
+    lensHitsVersion++
   }
 
   // ---- gather: the best results leave their lands and meet in the middle of the screen -------
   const gatherEl = $('.hero-gather')
-  interface GItem { cell: number; el: HTMLButtonElement; x: number; y: number; size: number; ready: boolean }
+  interface GItem {
+    cell: number
+    el: HTMLButtonElement
+    x: number
+    y: number
+    size: number
+    ready: boolean
+  }
   let gItems: GItem[] = []
   let gathered = false
   let gatherK = 0
@@ -1155,7 +1416,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     const old = new Map(gItems.map((g) => [g.cell, g]))
     gItems = cells.slice(0, slots.length).map((cell, i) => {
       const slot = slots[i]
-      let g = old.get(cell)
+      const g = old.get(cell)
       if (g) {
         old.delete(cell)
         Object.assign(g, slot)
@@ -1166,7 +1427,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'gather-item'
-      b.setAttribute('aria-label', `第 ${i + 1} 个结果，点击飞到它在地图上的位置`)
+      b.setAttribute('aria-label', t('hero.resultLabel', { n: i + 1 }))
       b.style.width = b.style.height = `${slot.size}px`
       const item: GItem = { cell, el: b, ...slot, ready: false }
       b.addEventListener('click', () => {
@@ -1215,12 +1476,12 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     tray.replaceChildren()
     tour = cells
     tourAt = -1
-    stepEl.hidden = cells.length < 2
+    stepEl.hidden = cells.length < 1
     cells.forEach((cell, i) => {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'tray-item'
-      b.title = '飞过去'
+      b.title = t('hero.fly')
       b.addEventListener('click', () => {
         tourAt = i
         flyToCell(cell)
@@ -1231,15 +1492,27 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     })
   }
 
+  let statusCopy = () => {
+    status.textContent = ''
+  }
+  const showStatus = (copy: () => void) => {
+    statusCopy = copy
+    copy()
+  }
+  let subjectText: (() => void)[] = []
+
   async function runSearch(fly = false) {
     const q = input.value
     const seq = ++searchSeq
+    resetBatch()
     el.classList.toggle('is-searching', !!q.trim())
     if (!q.trim()) {
       setHits(null)
       closeGather()
       gatherCells = []
-      status.textContent = ''
+      showStatus(() => {
+        status.textContent = ''
+      })
       subjectsEl.replaceChildren()
       tray.replaceChildren()
       stepEl.hidden = true
@@ -1247,7 +1520,10 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       return
     }
     suggest.hidden = true
-    if (!indexLoaded) status.textContent = '载入索引（5.4 MB）…'
+    if (!indexLoaded)
+      showStatus(() => {
+        status.textContent = t('hero.status.loading')
+      })
     const res = await search(q, overview)
     indexLoaded = true
     if (seq !== searchSeq || !res) return
@@ -1259,7 +1535,12 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       tray.replaceChildren()
       stepEl.hidden = true
       const cell = nearestColorCell(overview, res.rgb)
-      status.innerHTML = `<i class="sw" style="background:rgb(${res.rgb.join(',')})"></i> 飞往最接近 ${res.label} 的色区`
+      showStatus(() => {
+        const swatch = document.createElement('i')
+        swatch.className = 'sw'
+        swatch.style.background = `rgb(${res.rgb.join(',')})`
+        status.replaceChildren(swatch, t('hero.status.colour', { label: res.color && getLocale() === 'en' ? res.color.en : res.label }))
+      })
       if (fly || res.label.startsWith('#')) flyToCell(cell, 40)
       return
     }
@@ -1270,22 +1551,48 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       subjectsEl.replaceChildren()
       tray.replaceChildren()
       stepEl.hidden = true
-      status.textContent = `没找到「${q.trim()}」${res.english ? `（${res.english}）` : ''}，换个词试试`
+      showStatus(() => {
+        status.textContent = t('hero.status.none', { query: q.trim(), english: res.english ? t('hero.status.translation', { english: res.english }) : '' })
+      })
       sound.nothing()
       return
     }
     setHits(res.cells)
-    const label = res.color ? `${res.color.label}的「${res.english}」` : `「${q.trim()}」`
+    if (res.total > 0 && res.cells.length) {
+      batchResult = { query: q, english: res.english, total: res.total, cells: res.cells }
+      renderBatch()
+    }
+
     gatherCells = pickGather(res.cells, W < 760 ? 120 : 220, W < 760 ? 14 : 22)
-    status.innerHTML = `${label}命中 <b>${fmt(res.total)}</b> 张 · ${res.subjects.length} 个主题${res.total ? ' · 金点是它们在地图上的家' : ''}`
+    showStatus(() => {
+      const label = res.color
+        ? t('hero.status.colourQuery', { colour: getLocale() === 'en' ? res.color.en : res.color.label, query: res.english })
+        : t('hero.status.query', { query: q.trim() })
+      status.innerHTML = t('hero.status.hitsHtml', {
+        label: escapeHtml(label),
+        n: fmt(res.total),
+        subjects: res.subjects.length,
+        home: res.total ? t('hero.status.home') : '',
+      })
+    })
     sound.results(res.total)
+    subjectText = []
     subjectsEl.replaceChildren(
       ...res.subjects.slice(0, 6).map((s) => {
         const b = document.createElement('button')
         b.type = 'button'
         b.className = 'chip'
-        const zh = zhLabel(s.name)
-        b.innerHTML = `${s.name}${zh ? ` <span>${zh}</span>` : ''} <em>${fmt(s.count)}</em>`
+        const name = document.createTextNode(s.name)
+        const translation = document.createElement('span')
+        const count = document.createElement('em')
+        b.append(name, translation, ' ', count)
+        const update = () => {
+          const zh = getLocale() === 'zh-CN' ? zhLabel(s.name) : ''
+          translation.textContent = zh ? ` ${zh}` : ''
+          count.textContent = fmt(s.count)
+        }
+        subjectText.push(update)
+        update()
         b.addEventListener('click', () => {
           input.value = s.name
           runSearch()
@@ -1301,6 +1608,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   let deb = 0
   input.addEventListener('input', () => {
     sound.key()
+    ++searchSeq
+    resetBatch()
     clearTimeout(deb)
     deb = window.setTimeout(() => runSearch(false), 160)
   })
@@ -1345,26 +1654,26 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     flyToCell(cell)
   })
   // zoom buttons: the same zoom as the wheel, around the screen centre
-  el.querySelectorAll<HTMLButtonElement>('[data-zoom]').forEach((b) =>
+  el.querySelectorAll<HTMLButtonElement>('[data-zoom]').forEach((b) => {
     b.addEventListener('click', () => {
       const k = b.dataset.zoom
-      if (k === 'fit') {
-        deselect()
-        goHome()
-      } else if (k === 'planet') {
-        deselect()
-        if (mapE > 0.5) goPlanet()
-        else goHome()
-      } else zoomAt(k === 'in' ? 2.2 : 1 / 2.2, W / 2, Hh / 2)
+      if (k === 'view') toggleView()
+      else zoomAt(k === 'in' ? 2.2 : 1 / 2.2, W / 2, Hh / 2)
       sound.click()
-    }),
-  )
+    })
+  })
+  lodButtons.forEach((b, level) => {
+    b.addEventListener('click', () => {
+      goLod(level)
+      sound.click()
+    })
+  })
   window.addEventListener('keydown', (e) => {
     if (!el.classList.contains('is-active') || e.target instanceof HTMLInputElement) return
     if (e.key === 'Escape') closeGather()
     if (e.key === '+' || e.key === '=') zoomAt(1.8, W / 2, Hh / 2)
     else if (e.key === '-' || e.key === '_') zoomAt(1 / 1.8, W / 2, Hh / 2)
-    else if (e.key === '0') goHome()
+    else if (e.key === '0') toggleView()
     else if (e.key === 'q' || e.key === 'Q') rotatePlanet(-0.12)
     else if (e.key === 'e' || e.key === 'E') rotatePlanet(0.12)
   })
@@ -1375,6 +1684,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   let pinch: { d: number; mx: number; my: number; ang: number } | null = null
   let hoverCell = -1
   let mouse = { x: -1, y: -1, inside: false }
+  let pointerIsTouch = false
   let rotAcc = 0
   let capTimer = 0
   let capFor = -1
@@ -1385,6 +1695,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   }
 
   canvas.addEventListener('pointerdown', (e) => {
+    pointerIsTouch = e.pointerType === 'touch'
     const p = local(e)
     pointers.set(e.pointerId, p)
     canvas.setPointerCapture(e.pointerId)
@@ -1409,6 +1720,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   })
 
   canvas.addEventListener('pointermove', (e) => {
+    pointerIsTouch = e.pointerType === 'touch'
     const p = local(e)
     mouse = { ...p, inside: true }
     const prev = pointers.get(e.pointerId)
@@ -1419,7 +1731,9 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       const mx = (a.x + b.x) / 2
       const my = (a.y + b.y) / 2
       const [wx, wy] = toMapPt(pinch.mx, pinch.my)
-      cam.z = tgtZ = Math.min(zMax(), Math.max(zMin(), cam.z * (d / pinch.d)))
+      const nz = Math.min(zMax(), Math.max(zMin(), cam.z * (d / Math.max(pinch.d, 1))))
+      if (nz !== cam.z || mx !== pinch.mx || my !== pinch.my) dismissHint()
+      cam.z = tgtZ = nz
       const [nx, ny] = toMapPt(mx, my)
       cam.x += wx - nx
       cam.y += wy - ny
@@ -1455,6 +1769,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
           sound.tick(1400 + Math.min(1600, Math.abs(vel.a) * 9000), 0.02)
         }
       } else {
+        if (dx || dy) dismissHint()
         const c = Math.cos(cam.a)
         const s = Math.sin(cam.a)
         const wx = (c * dx - s * dy) / cam.z
@@ -1477,6 +1792,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
 
   const endPointer = (e: PointerEvent) => {
     pointers.delete(e.pointerId)
+    mouse.inside = document.elementFromPoint(e.clientX, e.clientY) === canvas
     if (pointers.size < 2) pinch = null
     canvas.classList.remove('is-grabbing', 'is-rotating')
     if (!drag) return
@@ -1491,6 +1807,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   canvas.addEventListener('pointerleave', () => {
     mouse.inside = false
     hoverCell = -1
+    if (!gHover) tip.hidden = true
   })
 
   function clickAt(sx: number, sy: number) {
@@ -1500,14 +1817,21 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       return
     }
     const cell = Math.floor(wy) * SIDE + Math.floor(wx)
-    if (cam.z < 8) flyTo(wx, wy, Math.max(9, cam.z * 4))
-    else if (cell === selected) flyTo(Math.floor(wx) + 0.5, Math.floor(wy) + 0.5, zMax() * 0.9)
-    else select(cell)
+    if (cam.z < 8) {
+      const z = Math.max(9, cam.z * 4)
+      noteUserZoom(z)
+      flyTo(wx, wy, z)
+    } else if (cell === selected) {
+      noteUserZoom(zMax() * 0.9)
+      flyTo(Math.floor(wx) + 0.5, Math.floor(wy) + 0.5, zMax() * 0.9)
+    } else select(cell)
   }
 
   function updateHover() {
-    if (!mouse.inside || cam.z < 10 || drag) {
+    if (!mouse.inside || cam.z < 4 || drag || pinch || flight || gathered) {
       hoverCell = -1
+      clearTimeout(capTimer)
+      if (!gHover) tip.hidden = true
       return
     }
     const [wx, wy] = toWorld(mouse.x, mouse.y)
@@ -1529,12 +1853,580 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     }
   }
 
+  // ---- lens: a dock-style fisheye, drawn in place over the map ------------------------------
+  // The cells around the pointer are redrawn where they are: the hovered sprite grows to LENS_PX, its neighbours
+  // grow less and are pushed outward, and a squeezed ring further out gives the room back. At LENS_R every cell is
+  // exactly where and how big the map draws it, so the lens needs no rim.
+  //
+  // Along a ray from the pointer, with u the distance in cells, the local scale is
+  //   σ(u) = 1 + (M − 1)·bump(u) − κ·squeeze(u)
+  // and a cell lands at f(u) = ∫σ. κ is set so that the two terms cancel over the lens, which makes f(U) = U;
+  // κ stays below 1, so σ > 0 and neighbours never swap places.
+  /** the hovered sprite on screen, in CSS px: four screen pixels per sprite pixel */
+  const LENS_PX = 64
+  /** beyond this many CSS px from the pointer the map is untouched */
+  const LENS_R = 224
+  /** the lens canvas: the radius plus room for the cells that straddle it */
+  const LENS_BOX = 2 * (LENS_R + 32)
+  /** the lens fades out between these zooms: the sprites there are nearly LENS_PX already */
+  const LENS_FADE = [48, 56] as const
+  /**
+   * The colour layer below has no lens, so leaving it the hovered sprite grows out of its own cell (no lens at
+   * the first zoom) and only reaches LENS_PX by the end of this range, instead of jumping straight to 16×.
+   */
+  const LENS_RAMP = [4, 11] as const
+  const lensTarget = (z: number) => z + (LENS_PX - z) * smooth(LENS_RAMP[0], LENS_RAMP[1], z)
+  const LENS_EASE_MS = 120
+  const LENS_EASE_STEPS = 4
+  /** cells drawn smaller than this come from the 4 px thumbnails, as the map itself does at that size */
+  const LENS_THUMB_BELOW = 12
+  const LENS_INK = '#07060c'
+  const LENS_GOLD = '#ffcc4d'
+  /** in cells: the bump is flat this far out, so the hovered sprite keeps its full size while the pointer is on it */
+  const BUMP_FLAT = 0.45
+  const BUMP_END = 3.2
+  const SQUEEZE_FROM = 2
+  /** the squeeze rises over this share of its span, then tails off all the way to LENS_R */
+  const SQUEEZE_RISE = 0.1
+  const SQUEEZE_MAX = 0.85
+  const bump = (u: number) => (u <= BUMP_FLAT ? 1 : u >= BUMP_END ? 0 : (1 - smooth(2, BUMP_END, u)) / (1 + ((u - BUMP_FLAT) / 0.79) ** 1.17))
+  const BUMP_STEPS = 128
+  /** ∫ bump from 0, sampled across [0, BUMP_END] */
+  const bumpSum = new Float32Array(BUMP_STEPS + 1)
+  for (let i = 0; i < BUMP_STEPS; i++) {
+    let sum = 0
+    for (let j = 0; j < 8; j++) sum += bump(((i + (j + 0.5) / 8) * BUMP_END) / BUMP_STEPS)
+    bumpSum[i + 1] = bumpSum[i] + (sum / 8) * (BUMP_END / BUMP_STEPS)
+  }
+  const BUMP_AREA = bumpSum[BUMP_STEPS]
+  const bumpArea = (u: number) => {
+    if (u >= BUMP_END) return BUMP_AREA
+    const t = (u / BUMP_END) * BUMP_STEPS
+    const i = Math.floor(t)
+    return bumpSum[i] + (bumpSum[i + 1] - bumpSum[i]) * (t - i)
+  }
+  /** the squeeze profile at x in 0…1 of its span, and the share of its area that lies before x */
+  let squeezeAt = 0
+  let squeezeBefore = 0
+  function squeeze(x: number) {
+    if (x <= 0) {
+      squeezeAt = squeezeBefore = 0
+    } else if (x < SQUEEZE_RISE) {
+      const t = x / SQUEEZE_RISE
+      squeezeAt = t * t * (3 - 2 * t)
+      squeezeBefore = 2 * SQUEEZE_RISE * (t * t * t - (t * t * t * t) / 2)
+    } else if (x < 1) {
+      const t = (x - SQUEEZE_RISE) / (1 - SQUEEZE_RISE)
+      squeezeAt = 1 - t * t * (3 - 2 * t)
+      squeezeBefore = SQUEEZE_RISE + 2 * (1 - SQUEEZE_RISE) * (t - t * t * t + (t * t * t * t) / 2)
+    } else {
+      squeezeAt = 0
+      squeezeBefore = 1
+    }
+  }
+
+  /** M − 1 for a zoom: the hovered sprite ends up LENS_PX wide, less and less so as the map nears that size by itself */
+  const lensGain = (z: number) => (z < LENS_RAMP[0] || z >= LENS_FADE[1] ? 0 : Math.max(0, lensTarget(z) / z - 1) * (1 - smooth(LENS_FADE[0], LENS_FADE[1], z)))
+
+  // the lens as it is set up right now (lensSetup), and what lensAt() last worked out
+  let lensM1 = 0
+  let lensSpan = 1
+  let lensKappa = 0
+  /** in cells: past this the cells have moved by less than half a pixel and are left to the map */
+  let lensReach = 0
+  /** how far from the pointer a cell is drawn, as a multiple of its real distance */
+  let lensPush = 1
+  /** how big a cell is drawn, as a multiple of its real size */
+  let lensSize = 1
+  function lensSetup(z: number, strength: number) {
+    lensSpan = LENS_R / z - SQUEEZE_FROM
+    // (the cap is never reached with the constants above; it is what keeps σ positive if they change)
+    lensM1 = Math.min(lensGain(z) * strength, (SQUEEZE_MAX * lensSpan) / (2 * BUMP_AREA))
+    lensKappa = (lensM1 * BUMP_AREA * 2) / lensSpan
+    let lo = 0
+    let hi = 1
+    for (let i = 0; i < 14; i++) {
+      const mid = (lo + hi) / 2
+      squeeze(mid)
+      if (lensM1 * BUMP_AREA * (1 - squeezeBefore) * z > 0.5) lo = mid
+      else hi = mid
+    }
+    lensReach = Math.max(BUMP_END, SQUEEZE_FROM + hi * lensSpan)
+  }
+  function lensAt(u: number) {
+    const b = bump(u)
+    squeeze((u - SQUEEZE_FROM) / lensSpan)
+    lensPush = u > 1e-4 ? 1 + (lensM1 * (bumpArea(u) - BUMP_AREA * squeezeBefore)) / u : 1 + lensM1
+    const sigma = 1 + lensM1 * b - lensKappa * squeezeAt
+    // A square cell cannot follow the stretch around the pointer and the squeeze along the ray at once. Next to the
+    // pointer it keeps close to the scale along the ray, so neighbours touch; further out it leans towards the
+    // stretch, so the squeezed ring overlaps like roof tiles instead of leaving dark gaps.
+    const lean = 0.2 + 0.65 * smooth(1.25, 3, u)
+    lensSize = Math.max(1, 1 + lensM1 * b, sigma ** (1 - lean) * lensPush ** lean)
+  }
+  /** how far below the pointer the tooltip goes: past the hovered sprite and its first ring */
+  function lensTipGap() {
+    lensSetup(cam.z, 1)
+    lensAt(1)
+    return Math.round((lensPush + lensSize / 2) * cam.z) + 10
+  }
+
+  // ---- lens: what it draws from ----
+  // Two small sheets hold the cells around the pointer, each on the dark wash of its own colour that the map puts
+  // behind a sprite: thumbnails at 4 px a cell for the far field, sprites at 16 px for everything drawn large.
+  const THUMB_REACH = Math.ceil(LENS_R / 4) + 1
+  const SPRITE_REACH = Math.ceil(LENS_R / LENS_THUMB_BELOW) + 1
+  const THUMB_SIDE = THUMB_REACH * 2 + 1
+  const sheet = (side: number) => {
+    const c = document.createElement('canvas')
+    c.width = c.height = side
+    const ctx = c.getContext('2d')!
+    ctx.imageSmoothingEnabled = false
+    return { canvas: c, ctx }
+  }
+  const washSheet = sheet(THUMB_SIDE)
+  const thumbSheet = sheet(THUMB_SIDE * 4)
+  const spriteSheet = sheet((SPRITE_REACH * 2 + 1) * 16)
+  const washData = washSheet.ctx.createImageData(THUMB_SIDE, THUMB_SIDE)
+  /** per cell of the wash sheet: 1 where the cell is on the hovered land */
+  const lensOwn = new Uint8Array(THUMB_SIDE * THUMB_SIDE)
+  const loupeTiles = new Map<number, ImageBitmap>()
+  const loupePending = new Set<number>()
+  const loupeMissing = new Set<number>()
+  let lensTilesVersion = 0
+  /** a tile for the sheets, or null while it is on its way (or when `ask` is off and the lens does not hold it) */
+  function lensTile(level: 1 | 2, tx: number, ty: number, ask = true) {
+    const key = level * 65536 + ty * 256 + tx
+    const have = loupeTiles.get(key)
+    // (a bitmap the tile cache has evicted is closed and reports no width)
+    if (have?.width) return have
+    loupeTiles.delete(key)
+    if (!ask || loupePending.has(key) || loupeMissing.has(key)) return null
+    loupePending.add(key)
+    tileBitmap(level, tx, ty).then((bitmap) => {
+      loupePending.delete(key)
+      if (!bitmap) loupeMissing.add(key)
+      if (!bitmap?.width) return
+      loupeTiles.set(key, bitmap)
+      lensTilesVersion++
+    })
+    return null
+  }
+
+  // the sheets as they were last built: around which cell, on which land, how many cells out, with which tiles
+  let sheetCell = -1
+  let sheetLand = -2
+  let sheetWash = 0
+  let sheetThumbs = -1
+  let sheetSprites = -1
+  let sheetTiles = -1
+  /** let go of a tile the sheets no longer reach (all of them once the lens has been away for a while) */
+  function dropLensTile(bitmap: ImageBitmap, key: number) {
+    const level = Math.floor(key / 65536)
+    const n = level === 1 ? meta.l1.cells : meta.l2.cells
+    const reach = level === 1 ? sheetThumbs : sheetSprites
+    const tx = key % 256
+    const ty = Math.floor(key / 256) % 256
+    const hx = sheetCell % SIDE
+    const hy = Math.floor(sheetCell / SIDE)
+    if (sheetCell >= 0 && bitmap.width && (tx + 1) * n > hx - reach && tx * n <= hx + reach && (ty + 1) * n > hy - reach && ty * n <= hy + reach) return
+    // (level 1 bitmaps are not kept by the atlas cache, so the lens owns the ones it asked for)
+    if (level === 1 && bitmap.width) bitmap.close()
+    loupeTiles.delete(key)
+  }
+  /** paint one level's tiles over the wash; a tile that is not here yet falls back to the coarser one, then to flat colour */
+  function fillSheet(to: CanvasRenderingContext2D, level: 1 | 2, x0: number, y0: number, reach: number) {
+    const px = level === 1 ? 4 : 16
+    const n = level === 1 ? meta.l1.cells : meta.l2.cells
+    const nt = level === 1 ? meta.l1.tiles : meta.l2.tiles
+    const n1 = meta.l1.cells
+    const side = reach * 2 + 1
+    const from = THUMB_REACH - reach
+    to.clearRect(0, 0, side * px, side * px)
+    to.drawImage(washSheet.canvas, from, from, side, side, 0, 0, side * px, side * px)
+    for (let ty = Math.max(0, Math.floor(y0 / n)); ty <= Math.min(nt - 1, Math.floor((y0 + side - 1) / n)); ty++)
+      for (let tx = Math.max(0, Math.floor(x0 / n)); tx <= Math.min(nt - 1, Math.floor((x0 + side - 1) / n)); tx++) {
+        const ax = Math.max(x0, tx * n)
+        const ay = Math.max(y0, ty * n)
+        // (the last level 1 tile runs past the edge of the grid)
+        const w = Math.min(x0 + side, (tx + 1) * n, SIDE) - ax
+        const h = Math.min(y0 + side, (ty + 1) * n, SIDE) - ay
+        if (w <= 0 || h <= 0) continue
+        const bitmap = lensTile(level, tx, ty)
+        // (a level 2 tile always sits inside one level 1 tile)
+        const coarse = bitmap || level === 1 ? null : lensTile(1, Math.floor(ax / n1), Math.floor(ay / n1), false)
+        if (bitmap) to.drawImage(bitmap, (ax - tx * n) * px, (ay - ty * n) * px, w * px, h * px, (ax - x0) * px, (ay - y0) * px, w * px, h * px)
+        else if (coarse) to.drawImage(coarse, (ax % n1) * 4, (ay % n1) * 4, w * 4, h * 4, (ax - x0) * px, (ay - y0) * px, w * px, h * px)
+        else to.drawImage(ovCanvas, ax, ay, w, h, (ax - x0) * px, (ay - y0) * px, w * px, h * px)
+      }
+  }
+  function buildSheets(cell: number, land: number, thumbs: number, sprites: number) {
+    const hx = cell % SIDE
+    const hy = Math.floor(cell / SIDE)
+    const reach = Math.max(thumbs, sprites)
+    if (cell !== sheetCell || land !== sheetLand || reach > sheetWash) {
+      // Well inside a land nothing needs testing: within a piece pieceDist() changes by less than three per cell
+      // (the core island is the exception, its wobble is steep near the middle, so it goes by radius).
+      const far = reach * Math.SQRT2 + 1
+      const fromMiddle = Math.hypot(hx + 0.5 - D, hy + 0.5 - D)
+      const inland = land > 0 ? pieceDist(hx + 0.5 - D, hy + 0.5 - D, land) < -3 * far : fromMiddle + far < (land === 0 ? RC - R * 0.08 : R)
+      const data = washData.data
+      for (let j = THUMB_REACH - reach; j <= THUMB_REACH + reach; j++)
+        for (let i = THUMB_REACH - reach; i <= THUMB_REACH + reach; i++) {
+          const o = j * THUMB_SIDE + i
+          const x = hx - THUMB_REACH + i
+          const y = hy - THUMB_REACH + j
+          let own = x >= 0 && y >= 0 && x < SIDE && y < SIDE
+          if (own && !inland) own = land >= 0 ? pieceDist(x + 0.5 - D, y + 0.5 - D, land) <= 0 : Math.hypot(x + 0.5 - D, y + 0.5 - D) < R
+          // (the pointer is on the hovered cell even where the middle of that cell is off the land)
+          if (i === THUMB_REACH && j === THUMB_REACH) own = true
+          lensOwn[o] = own ? 1 : 0
+          if (!own) {
+            data[o * 4 + 3] = 0
+            continue
+          }
+          // the same dark wash of its own colour that the map puts behind each sprite
+          const q = (y * SIDE + x) * 4
+          const keep = 1 - (overview.px[q + 3] / 255) * 0.4
+          data[o * 4] = 7 * keep + overview.px[q] * 0.16
+          data[o * 4 + 1] = 6 * keep + overview.px[q + 1] * 0.16
+          data[o * 4 + 2] = 12 * keep + overview.px[q + 2] * 0.16
+          data[o * 4 + 3] = 255
+        }
+      washSheet.ctx.putImageData(washData, 0, 0, THUMB_REACH - reach, THUMB_REACH - reach, reach * 2 + 1, reach * 2 + 1)
+      sheetWash = reach
+    }
+    sheetCell = cell
+    sheetLand = land
+    sheetThumbs = thumbs
+    sheetSprites = sprites
+    loupeTiles.forEach(dropLensTile)
+    if (thumbs) fillSheet(thumbSheet.ctx, 1, hx - thumbs, hy - thumbs, thumbs)
+    fillSheet(spriteSheet.ctx, 2, hx - sprites, hy - sprites, sprites)
+    // (a tile that arrives later bumps the version, and the sheets are built again with it)
+    sheetTiles = lensTilesVersion
+  }
+
+  // ---- lens: drawing ----
+  /** eased strength, 0…1 */
+  let lensOn = 0
+  let lensTick = 0
+  let lensHiddenAt = 0
+  /** where the lens is centred, in disc cells, and the cell and land under that point */
+  let lensWX = 0
+  let lensWY = 0
+  let lensCell = -1
+  let lensLand = -2
+  /** device pixels per CSS px of the lens canvas */
+  let lensScale = 0
+  /** true while the lens has redrawn the selected cell somewhere else than the map has it */
+  let lensHoldsSelected = false
+  /** everything the last drawing depended on; nothing is redrawn while it all stays the same */
+  const LENS_STATE = 18
+  const lensDrawn = new Float64Array(LENS_STATE)
+  const lensNow = new Float64Array(LENS_STATE)
+  // the vignette the map shader multiplies in, as a gradient over the unit square of the view: 1 − 0.8·d²
+  const lensVignette = loupeCtx.createRadialGradient(0, 0, 0, 0, 0, 0.8)
+  for (let i = 0; i <= 8; i++) lensVignette.addColorStop(i / 8, `rgba(0,0,0,${(0.8 * ((0.8 * i) / 8) ** 2).toFixed(4)})`)
+
+  // one drawing pass, set up by drawLens()
+  let passZ = 1
+  let passCos = 1
+  let passSin = 0
+  let passX = 0
+  let passY = 0
+  let passDim = 0
+  let passGrid = 0
+  let passLine = 1
+  let passHx = 0
+  let passHy = 0
+  let passRings = 0
+  let cellX = 0
+  let cellY = 0
+  let cellW = 0
+  let cellH = 0
+  let cellU = 0
+  /** a CSS px offset inside the lens canvas → device px. Whole CSS px wherever the screen has whole device px for them. */
+  const lensPx = (v: number) => (Number.isInteger(lensScale) ? Math.round(v) * lensScale : Math.round(v * lensScale))
+  /** where the lens puts a cell: false when it leaves the cell to the map */
+  function lensRect(x: number, y: number) {
+    const dx = x + 0.5 - lensWX
+    const dy = y + 0.5 - lensWY
+    cellU = Math.sqrt(dx * dx + dy * dy)
+    if (cellU >= lensReach || Math.abs(x - passHx) > passRings || Math.abs(y - passHy) > passRings) return false
+    if (!lensOwn[(y - passHy + THUMB_REACH) * THUMB_SIDE + x - passHx + THUMB_REACH]) return false
+    lensAt(cellU)
+    const half = (lensSize * passZ) / 2
+    const cx = passX + (passCos * dx + passSin * dy) * passZ * lensPush
+    const cy = passY + (passCos * dy - passSin * dx) * passZ * lensPush
+    cellX = lensPx(cx - half)
+    cellY = lensPx(cy - half)
+    cellW = lensPx(cx + half) - cellX
+    cellH = lensPx(cy + half) - cellY
+    return cellW > 0 && cellH > 0
+  }
+  function lensCellDraw(x: number, y: number) {
+    if (!lensRect(x, y)) return
+    const ctx = loupeCtx
+    const dx = x - passHx
+    const dy = y - passHy
+    if (lensSize * passZ >= LENS_THUMB_BELOW && Math.abs(dx) <= sheetSprites && Math.abs(dy) <= sheetSprites)
+      ctx.drawImage(spriteSheet.canvas, (dx + sheetSprites) * 16, (dy + sheetSprites) * 16, 16, 16, cellX, cellY, cellW, cellH)
+    else if (sheetThumbs) ctx.drawImage(thumbSheet.canvas, (dx + sheetThumbs) * 4, (dy + sheetThumbs) * 4, 4, 4, cellX, cellY, cellW, cellH)
+    // the map's one-pixel cell lines, along the left and the top of every cell
+    if (passGrid > 0 && cellW > passLine && cellH > passLine) {
+      ctx.globalAlpha = passGrid
+      ctx.fillRect(cellX, cellY, cellW, passLine)
+      ctx.fillRect(cellX, cellY + passLine, passLine, cellH - passLine)
+      ctx.globalAlpha = 1
+    }
+    // near the pointer the search dim lifts with the bump, so what is being looked at stays bright
+    if (passDim > 0) {
+      const dim = passDim * (1 - bump(cellU))
+      if (dim > 0.01) {
+        ctx.globalAlpha = dim
+        ctx.fillRect(cellX, cellY, cellW, cellH)
+        ctx.globalAlpha = 1
+      }
+    }
+  }
+  /** the gold marks the map draws as overlays: search hits, the selected cell, the hovered cell */
+  function lensCellMark(x: number, y: number) {
+    const cell = y * SIDE + x
+    const hit = lensHits?.has(cell)
+    const hovered = x === passHx && y === passHy
+    if (!hit && !hovered && cell !== selected) return
+    if (!lensRect(x, y)) return
+    const ctx = loupeCtx
+    const px = passLine
+    if (hit) {
+      // as on the map: a frame a little larger than the cell, or a solid block while the cell is too small for one
+      const pad = Math.round((cellW * 0.1) / px) * px
+      if (cellW < 10 * px) ctx.fillRect(cellX, cellY, Math.max(cellW, 3 * px), Math.max(cellH, 3 * px))
+      else lensFrame(cellX - pad, cellY - pad, cellW + 2 * pad, cellH + 2 * pad, 2 * px, 0)
+    }
+    if (cell === selected) lensFrame(cellX - 6 * px, cellY - 6 * px, cellW + 12 * px, cellH + 12 * px, 3 * px, 10 * px)
+    else if (hovered) lensFrame(cellX, cellY, cellW, cellH, 2 * px, 0)
+  }
+  /** a frame of the given thickness, or only its corners when `corner` gives their length */
+  function lensFrame(x: number, y: number, w: number, h: number, t: number, corner: number) {
+    const ctx = loupeCtx
+    if (!corner) {
+      ctx.fillRect(x, y, w, t)
+      ctx.fillRect(x, y + h - t, w, t)
+      ctx.fillRect(x, y + t, t, h - 2 * t)
+      ctx.fillRect(x + w - t, y + t, t, h - 2 * t)
+      return
+    }
+    for (let i = 0; i < 4; i++) {
+      const cx = i & 1 ? x + w - corner : x
+      const cy = i & 2 ? y + h - corner : y
+      ctx.fillRect(cx, i & 2 ? y + h - t : y, corner, t)
+      ctx.fillRect(i & 1 ? x + w - t : x, cy, t, corner)
+    }
+  }
+  /** every cell of a square ring around the hovered cell, once */
+  function lensRing(ring: number, each: (x: number, y: number) => void) {
+    if (!ring) {
+      each(passHx, passHy)
+      return
+    }
+    for (let i = -ring; i < ring; i++) {
+      each(passHx + i, passHy - ring)
+      each(passHx + ring, passHy + i)
+      each(passHx - i, passHy + ring)
+      each(passHx - ring, passHy - i)
+    }
+  }
+
+  function drawLens(strength: number, left: number, top: number, fx: number, fy: number) {
+    const ctx = loupeCtx
+    const z = cam.z
+    const size = Math.round(LENS_BOX * lensScale)
+    if (loupeCanvas.width !== size) {
+      loupeCanvas.width = loupeCanvas.height = size
+      loupeCanvas.style.width = loupeCanvas.style.height = `${LENS_BOX}px`
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.globalAlpha = 1
+    ctx.imageSmoothingEnabled = false
+    ctx.clearRect(0, 0, size, size)
+
+    // the sheets cover what the lens reaches at full strength, so they are not rebuilt while it eases in
+    lensSetup(z, 1)
+    const reach = Math.min(THUMB_REACH, Math.ceil(lensReach) + 1)
+    let sprites = reach
+    let thumbs = 0
+    if (z < LENS_THUMB_BELOW) {
+      thumbs = reach
+      sprites = 1
+      for (let u = 1; u < reach && u < SPRITE_REACH; u += 0.5) {
+        lensAt(u)
+        if (lensSize * z >= LENS_THUMB_BELOW) sprites = Math.ceil(u) + 1
+      }
+    }
+    sprites = Math.min(sprites, SPRITE_REACH)
+    if (lensCell !== sheetCell || lensLand !== sheetLand || thumbs !== sheetThumbs || sprites !== sheetSprites || lensTilesVersion !== sheetTiles)
+      buildSheets(lensCell, lensLand, thumbs, sprites)
+
+    lensSetup(z, strength)
+    // (the pointer is inside the hovered cell, so a cell k rings out is at least k − ½ cells away)
+    passRings = Math.min(reach, Math.ceil(lensReach + 0.5))
+    passZ = z
+    passCos = Math.cos(cam.a)
+    passSin = Math.sin(cam.a)
+    passX = fx - left
+    passY = fy - top
+    passHx = lensCell % SIDE
+    passHy = Math.floor(lensCell / SIDE)
+    passLine = Math.max(1, Math.round(lensScale))
+    passDim = 0
+    // (the map's cell lines fade in between 6 and 16 px a cell; while they are faint they are not worth two rectangles a cell)
+    passGrid = smooth(6, 16, z) * 0.6 * 0.65
+    if (passGrid < 0.2) passGrid = 0
+
+    // 1. Hide the map under every cell the lens is about to move, row by row.
+    ctx.fillStyle = LENS_INK
+    for (let y = passHy - passRings; y <= passHy + passRings; y++) {
+      const dy = y + 0.5 - lensWY
+      const chord = lensReach * lensReach - dy * dy
+      if (chord <= 0) continue
+      const span = Math.sqrt(chord)
+      const xa = Math.max(passHx - passRings, Math.ceil(lensWX - span - 0.5))
+      const xb = Math.min(passHx + passRings, Math.floor(lensWX + span - 0.5))
+      const y0 = lensPx(passY + (y - lensWY) * z)
+      const y1 = lensPx(passY + (y + 1 - lensWY) * z)
+      let run = -1
+      for (let x = xa; x <= xb + 1; x++) {
+        const own = x <= xb && lensOwn[(y - passHy + THUMB_REACH) * THUMB_SIDE + x - passHx + THUMB_REACH] === 1
+        if (own && run < 0) run = x
+        else if (!own && run >= 0) {
+          const x0 = lensPx(passX + (run - lensWX) * z)
+          ctx.fillRect(x0, y0, lensPx(passX + (x - lensWX) * z) - x0, y1 - y0)
+          run = -1
+        }
+      }
+    }
+
+    // 2. The cells, from the outside in, so that whatever is nearer the pointer lies on top.
+    ctx.fillStyle = '#000'
+    for (let ring = passRings; ring >= 0; ring--) {
+      // every cell the bump reaches is within three rings; the rest dims as one, exactly like the map around it
+      if (ring === 3 && mapDim > 0.01) {
+        ctx.globalCompositeOperation = 'source-atop'
+        ctx.globalAlpha = mapDim
+        ctx.fillRect(0, 0, size, size)
+        ctx.globalAlpha = 1
+        ctx.globalCompositeOperation = 'source-over'
+        passDim = mapDim
+      }
+      lensRing(ring, lensCellDraw)
+    }
+
+    // 3. The map's vignette, over what has been painted and nothing else.
+    ctx.globalCompositeOperation = 'source-atop'
+    ctx.setTransform(W * lensScale, 0, 0, Hh * lensScale, (W / 2 - left) * lensScale, (Hh / 2 - top) * lensScale)
+    ctx.fillStyle = lensVignette
+    ctx.fillRect(-1, -1, 2, 2)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'source-over'
+
+    // 4. The gold marks, which the map also draws on top of everything.
+    ctx.fillStyle = LENS_GOLD
+    if (lensHits) for (let ring = passRings; ring > 0; ring--) lensRing(ring, lensCellMark)
+    else if (selected >= 0 && selected !== lensCell) lensCellMark(selected % SIDE, Math.floor(selected / SIDE))
+    lensCellMark(passHx, passHy)
+    lensHoldsSelected = selected >= 0 && lensRect(selected % SIDE, Math.floor(selected / SIDE))
+  }
+
+  function hideLoupe() {
+    lensOn = 0
+    lensHoldsSelected = false
+    if (!loupe.hidden) {
+      loupe.hidden = true
+      lensHiddenAt = lensTick
+    }
+    // the tiles stay for a moment, so the lens comes back whole when the pointer only crossed a strait
+    if (loupeTiles.size && lensTick - lensHiddenAt > 8000) {
+      sheetCell = -1
+      loupeTiles.forEach(dropLensTile)
+    }
+  }
+
+  function updateLoupe() {
+    const now = performance.now()
+    const dt = now - lensTick
+    lensTick = now
+    const z = cam.z
+    // gone at once whenever the map itself is on the move, or where there is no lens at all
+    const turned = Math.abs(Math.sin(cam.a)) > 0.02 || Math.cos(cam.a) < 0
+    if (!fine.matches || touch || pointerIsTouch || lensGain(z) * z < 1 || turned || drag?.moved || pinch || flight || gathered) {
+      hideLoupe()
+      return
+    }
+    // (a press that may still be a click keeps the lens as it is)
+    const held = !!drag
+    const want = held ? lensOn > 0 : mouse.inside && hoverCell >= 0
+    if (want && !held) {
+      const [wx, wy] = toWorld(mouse.x, mouse.y)
+      lensWX = wx
+      lensWY = wy
+      lensCell = hoverCell
+      lensLand = mapE > 0.5 ? pieceOf(wx, wy) : -1
+    }
+    if (!held) {
+      const step = reducedMotion ? 1 : dt / LENS_EASE_MS
+      lensOn = want ? Math.min(1, lensOn + step) : Math.max(0, lensOn - step)
+    }
+    if (lensOn <= 0 || lensCell < 0) {
+      hideLoupe()
+      return
+    }
+    // stepped, like every other transition here
+    const strength = Math.ceil(lensOn * LENS_EASE_STEPS) / LENS_EASE_STEPS
+    const scale = Math.min(3, window.devicePixelRatio || 1)
+    const [fx, fy] = mapToScreen(lensWX + (lensLand > 0 ? LANDS[lensLand].ox * mapE : 0), lensWY + (lensLand > 0 ? LANDS[lensLand].oy * mapE : 0))
+    // on whole CSS px where the screen allows it, like the map's own pixels
+    const grid = Number.isInteger(scale) ? 1 : scale
+    const left = Math.round((fx - LENS_BOX / 2) * grid) / grid
+    const top = Math.round((fy - LENS_BOX / 2) * grid) / grid
+    const s = lensNow
+    s[0] = fx
+    s[1] = fy
+    s[2] = cam.x
+    s[3] = cam.y
+    s[4] = z
+    s[5] = cam.a
+    s[6] = strength
+    s[7] = lensTilesVersion
+    s[8] = selected
+    s[9] = Math.round(mapDim * 64)
+    s[10] = lensHitsVersion
+    s[11] = W
+    s[12] = Hh
+    s[13] = scale
+    s[14] = lensCell
+    s[15] = lensLand
+    s[16] = lensWX
+    s[17] = lensWY
+    let same = !loupe.hidden
+    for (let i = 0; same && i < LENS_STATE; i++) same = s[i] === lensDrawn[i]
+    if (same) return
+    lensDrawn.set(s)
+    lensScale = scale
+    loupe.hidden = false
+    loupe.style.transform = `translate(${left}px, ${top}px)`
+    drawLens(strength, left, top, fx, fy)
+  }
+
   // ---- frame ------------------------------------------------------------------------------
   let raf = 0
   let active = false
   let last = performance.now()
   const t0 = last
   let readoutAt = 0
+  let lodShown = -1
 
   function frame() {
     const now = performance.now()
@@ -1650,7 +2542,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     gl!.uniform1f(u.uAngle, cam.a)
     gl!.uniform1f(u.uTime, time)
     gatherK += ((gathered ? 1 : 0) - gatherK) * Math.min(1, dt * 9)
-    gl!.uniform1f(u.uDim, Math.max(hitCount ? 0.5 * (1 - smooth(10, 30, z)) : 0, 0.74 * gatherK))
+    mapDim = Math.max(hitCount ? 0.5 * (1 - smooth(10, 30, z)) : 0, 0.74 * gatherK)
+    gl!.uniform1f(u.uDim, mapDim)
     gl!.uniform1f(u.uM1, m1)
     gl!.uniform1f(u.uM2, m2)
     gl!.uniform1f(u.uGrid, smooth(40, 90, z))
@@ -1682,6 +2575,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     gl!.bindVertexArray(null)
 
     // ---- DOM overlays
+    updateHover()
+    updateLoupe()
     const place = (box: HTMLElement, cell: number, pad: number) => {
       if (cell < 0) {
         box.hidden = true
@@ -1698,11 +2593,18 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
       box.style.transform = `translate(${sx - size / 2}px, ${sy - size / 2}px) rotate(${-cam.a}rad)`
       box.style.width = box.style.height = `${size}px`
     }
-    place(reticle, selected, 12)
-    place(hoverBox, hoverCell !== selected ? hoverCell : -1, 0)
+    // (the lens marks the hovered and the selected cell itself, where it has moved them to)
+    place(reticle, lensHoldsSelected ? -1 : selected, 12)
+    place(hoverBox, loupe.hidden && z >= 10 && hoverCell !== selected ? hoverCell : -1, 0)
     if (!tip.hidden && !gHover) {
       if (hoverCell !== capFor || hoverCell < 0) tip.hidden = true
-      else tip.style.transform = `translate(${Math.min(mouse.x + 18, W - 300)}px, ${mouse.y + 20}px)`
+      else if (loupe.hidden) tip.style.transform = `translate(${Math.min(mouse.x + 18, W - 300)}px, ${mouse.y + 20}px)`
+      else {
+        // clear of the magnified sprite and its first ring: below them, or above when there is no room
+        const gap = lensTipGap()
+        const below = mouse.y + gap + tip.offsetHeight <= Hh - 8
+        tip.style.transform = `translate(${Math.min(mouse.x + 18, W - 300)}px, ${below ? mouse.y + gap : mouse.y - gap - tip.offsetHeight}px)`
+      }
     }
 
     if (MAP_ON) {
@@ -1742,47 +2644,93 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
 
     if (now > readoutAt) {
       readoutAt = now + 120
-      const lod = z < 1.9 ? 0 : z < 4 ? 1 : z < 12 ? 2 : 3
-      lodItems.forEach((li, i) => li.classList.toggle('on', i === lod))
-      const vw = Math.round(W / z)
-      const vh = Math.round(Hh / z)
-      const lv = lod === 3 ? L2 : L1
-      tech.textContent = `视野 ${fmt(Math.min(vw, SIDE))}×${fmt(Math.min(vh, SIDE))} 格 · ${lod >= 2 ? `瓦片 ${lv.loaded}/${lv.slots} · ` : ''}已下载 ${(bytesDownloaded() / 1e6).toFixed(1)} MB`
+      updateReadout()
+    }
+  }
+
+  function updateReadout() {
+    const z = cam.z
+    const atMax = W > 50 && Hh > 50 && z >= zMax() * 0.985
+    const lod = z < 1.9 ? 0 : z < 4 ? 1 : z < 12 ? 2 : 3
+    if (lod !== lodShown) {
+      lodShown = lod
+      lodButtons.forEach((b, i) => {
+        b.setAttribute('aria-pressed', String(i === lod))
+      })
+    }
+    if (viewAction() !== viewShown) {
+      viewShown = viewAction()
+      renderViewButton()
+    }
+    const vw = Math.round(W / z)
+    const vh = Math.round(Hh / z)
+    const lv = lod === 3 ? L2 : L1
+    tech.textContent = t('hero.tech', {
+      w: fmt(Math.min(vw, SIDE)),
+      h: fmt(Math.min(vh, SIDE)),
+      tiles: lod >= 2 ? t('hero.tiles', { loaded: lv.loaded, slots: lv.slots }) : '',
+      mb: (bytesDownloaded() / 1e6).toFixed(1),
+    })
+    if (!hintDismissed)
       hint.textContent = atMax
-        ? '已到原图 · 点素材看详情'
+        ? t('hero.hint.full')
         : z < zFit() * 3.2
           ? touch
-            ? '双指缩放 / 旋转 · 点一下放大'
+            ? t('hero.hint.touch')
             : mapE > 0.5
-              ? '滚轮缩放 · 拖动平移 · 点一下放大 · 继续缩小会合拢成星球'
-              : '这是同一批素材合拢成的星球 · 拖外圈旋转 · 放大就裂开成地图'
+              ? t('hero.hint.map')
+              : t('hero.hint.planet')
           : z < 8
-            ? '再点一下继续放大 · 滚轮缩放'
+            ? t('hero.hint.again')
             : touch
-              ? '拖动平移 · 点素材看详情'
-              : '拖动平移 · 点素材看详情 · 再点一次放到最大'
-      intro.style.opacity = String(1 - smooth(1.4, 3, z / zFit()))
-      if (MAP_ON) {
-        // the plate: full on arrival, one line while exploring; the breadcrumb says where the view centre is
-        const away = z > zHome() * 1.22 || z < zHome() * 0.9 || Math.hypot(cam.x - homeX(), cam.y - homeY()) > R * 0.2
-        el.classList.toggle('is-exploring', away)
-        const here = mapE < 0.5 ? -2 : (() => {
-          const p = discOf(cam.x, cam.y)
-          return p ? pieceOf(p[0], p[1]) : -1
-        })()
-        const key = `${here}|${z >= 8}`
-        if (key !== crumbKey) {
-          crumbKey = key
-          crumb.innerHTML =
-            here === -2
-              ? `<b>星球</b> › <button type="button" data-go="home">展开成地图</button>`
-              : `<button type="button" data-go="planet">星球</button> › <button type="button" data-go="home">世界</button> › ${here < 0 ? '海上' : `<button type="button" data-go="${here}">${LANDS[here].name}</button>`}${z >= 8 ? ' › <b>素材</b>' : ''}`
-        }
+              ? t('hero.hint.pan')
+              : t('hero.hint.max')
+    intro.style.opacity = String(1 - smooth(1.4, 3, z / zFit()))
+    if (MAP_ON) {
+      // the plate: full on arrival, one line while exploring; the breadcrumb says where the view centre is
+      el.classList.toggle('is-exploring', isAway())
+      const here =
+        mapE < 0.5
+          ? -2
+          : (() => {
+              const p = discOf(cam.x, cam.y)
+              return p ? pieceOf(p[0], p[1]) : -1
+            })()
+      const key = `${here}|${z >= 8}`
+      if (key !== crumbKey) {
+        crumbKey = key
+        crumb.innerHTML =
+          here === -2
+            ? t('hero.crumb.planetHtml')
+            : t('hero.crumb.mapHtml', {
+                land: here < 0 ? t('hero.crumb.sea') : `<button type="button" data-go="${here}">${escapeHtml(LANDS[here].name())}</button>`,
+                sprite: z >= 8 ? t('hero.crumb.spriteHtml') : '',
+              })
       }
-      el.classList.toggle('is-deep', z > 12)
     }
-    updateHover()
+    el.classList.toggle('is-deep', z > 12)
   }
+  onLocaleChange(() => {
+    landText.forEach((update) => {
+      update()
+    })
+    if (selected >= 0 && cardReady) renderCard()
+    statusCopy()
+    renderBatch()
+    subjectText.forEach((update) => {
+      update()
+    })
+    gItems.forEach((item, i) => {
+      item.el.setAttribute('aria-label', t('hero.resultLabel', { n: i + 1 }))
+    })
+    tray.querySelectorAll('button').forEach((button) => {
+      button.title = t('hero.fly')
+    })
+    crumbKey = ''
+    // (the static markup was just reset to its opening labels)
+    viewShown = ''
+    updateReadout()
+  })
 
   const loop = () => {
     frame()
@@ -1793,7 +2741,7 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
   return {
     id: 'hero',
     num: '00',
-    title: '星图',
+    title: () => t('nav.atlas'),
     color: '#07060c',
     transition: 'dither',
     ambience: 'space',
@@ -1817,6 +2765,8 @@ export async function createHero(el: HTMLElement, hooks: HeroHooks): Promise<Cha
     leave() {
       active = false
       cancelAnimationFrame(raf)
+      mouse.inside = false
+      hideLoupe()
       input.blur()
     },
     focusSearch() {
