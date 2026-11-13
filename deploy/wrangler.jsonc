@@ -9,7 +9,13 @@
     "not_found_handling": "404-page"
   },
   "routes": [
-    { "pattern": "pixelatlas.org", "custom_domain": true },
-    { "pattern": "www.pixelatlas.org", "custom_domain": true }
+    {
+      "pattern": "pixelatlas.org",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.pixelatlas.org",
+      "custom_domain": true
+    }
   ]
 }

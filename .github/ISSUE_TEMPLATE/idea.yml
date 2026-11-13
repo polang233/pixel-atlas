@@ -1,0 +1,14 @@
+name: Idea (想法)
+description: Suggest something new or better (提一个新点子或改进)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea (你的想法)
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it would help (它能带来什么)
