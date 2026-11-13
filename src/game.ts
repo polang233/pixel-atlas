@@ -3,7 +3,10 @@
  * in the chapter copy, a score bar while playing, a result card at the end,
  * and the best score per game kept in localStorage (when it is available).
  */
+
 import { sound } from './audio'
+import { formatInt, getLocale, onLocaleChange, t } from './i18n'
+import { applyMessages } from './i18n/dom'
 import type { AmbienceName } from './types'
 
 export interface GameHooks {
@@ -43,8 +46,14 @@ export class GameShell {
   private bestEl: HTMLElement
   private extraEl: HTMLElement
   private card: HTMLElement
+  private title: () => string
+  private scoreValue = 0
+  private extraCopy = () => ''
+  private extraIsHtml = false
+  private result: { score: number; title: () => string; sub: () => string; record: boolean; won: boolean } | null = null
 
-  constructor(el: HTMLElement, id: string, title: string, hooks: GameHooks) {
+  constructor(el: HTMLElement, id: string, title: () => string, hooks: GameHooks) {
+    this.title = title
     this.el = el
     this.hooks = hooks
     this.key = `pixel-atlas:best:${id}`
@@ -52,11 +61,11 @@ export class GameShell {
     el.insertAdjacentHTML(
       'beforeend',
       `<div class="game-hud pix" hidden>
-        <span class="g-title">${title}</span>
-        <span>分数 <b class="g-score">0</b></span>
-        <span>最高 <b class="g-best">${this.best}</b></span>
+        <span class="g-title"></span>
+        <span><span data-i18n="game.score"></span> <b class="g-score">0</b></span>
+        <span><span data-i18n="game.best"></span> <b class="g-best">${this.best}</b></span>
         <span class="g-extra"></span>
-        <button type="button" class="chip g-quit">退出 <kbd>ESC</kbd></button>
+        <button type="button" class="chip g-quit" data-i18n-html="game.quitHtml"></button>
       </div>
       <div class="game-card" hidden>
         <div class="game-card-box">
@@ -64,8 +73,8 @@ export class GameShell {
           <h3 class="pix g-res"></h3>
           <p class="g-sub"></p>
           <div class="g-btns">
-            <button type="button" class="chip hot g-again">再来一局 <kbd>R</kbd></button>
-            <button type="button" class="chip g-exit">回到展示</button>
+            <button type="button" class="chip hot g-again" data-i18n-html="game.againHtml"></button>
+            <button type="button" class="chip g-exit" data-i18n="game.exit"></button>
           </div>
         </div>
       </div>`,
@@ -76,12 +85,15 @@ export class GameShell {
     this.bestEl = q('.g-best')
     this.extraEl = q('.g-extra')
     this.card = q('.game-card')
-    el.querySelectorAll<HTMLButtonElement>('.game-start').forEach((b) =>
+    applyMessages(el, getLocale())
+    onLocaleChange(() => this.renderText())
+    this.renderText()
+    el.querySelectorAll<HTMLButtonElement>('.game-start').forEach((b) => {
       b.addEventListener('click', (e) => {
         e.stopPropagation()
         this.begin()
-      }),
-    )
+      })
+    })
     q('.g-quit').addEventListener('click', () => this.quit())
     q('.g-again').addEventListener('click', () => this.begin())
     q('.g-exit').addEventListener('click', () => this.quit())
@@ -100,27 +112,52 @@ export class GameShell {
   begin() {
     this.playing = true
     this.over = false
+    this.result = null
     this.el.classList.add('is-playing')
     document.body.classList.add('is-playing-game')
     this.hud.hidden = false
     this.card.hidden = true
     this.score(0)
-    this.extra('')
+    this.extra(() => '')
     sound.select()
     if (this.hooks.ambience) sound.ambience(this.hooks.ambience)
     this.hooks.start()
   }
 
   score(n: number) {
-    this.scoreEl.textContent = String(n)
+    this.scoreValue = n
+    this.scoreEl.textContent = formatInt(n)
   }
 
-  extra(html: string) {
-    this.extraEl.innerHTML = html
+  extra(copy: () => string, html = false) {
+    this.extraCopy = copy
+    this.extraIsHtml = html
+    if (html) this.extraEl.innerHTML = copy()
+    else this.extraEl.textContent = copy()
+  }
+
+  private renderText() {
+    this.hud.querySelector('.g-title')!.textContent = this.title()
+    this.scoreEl.textContent = formatInt(this.scoreValue)
+    this.bestEl.textContent = formatInt(this.best)
+    this.extra(this.extraCopy, this.extraIsHtml)
+    if (!this.result) return
+    const { score, title, sub, record, won } = this.result
+    this.card.querySelector('.g-kind')!.textContent = won ? t('game.clear') : t('game.over')
+    this.card.querySelector('.g-res')!.textContent = title()
+    const detail = this.card.querySelector('.g-sub')!
+    const points = document.createElement('span')
+    points.innerHTML = t('game.pointsHtml', { score: formatInt(score) })
+    detail.replaceChildren(
+      sub(),
+      document.createElement('br'),
+      points,
+      record && score > 0 ? t('game.record') : t('game.bestScore', { score: formatInt(this.best) }),
+    )
   }
 
   /** a round ended: show the result card (play mode stays on underneath) */
-  end(score: number, title: string, sub: string, won = false) {
+  end(score: number, title: () => string, sub: () => string, won = false) {
     if (this.over) return
     this.over = true
     const record = score > this.best
@@ -129,9 +166,8 @@ export class GameShell {
       write(this.key, score)
       this.bestEl.textContent = String(score)
     }
-    this.card.querySelector('.g-kind')!.textContent = won ? 'STAGE CLEAR' : 'GAME OVER'
-    this.card.querySelector('.g-res')!.textContent = title
-    this.card.querySelector('.g-sub')!.innerHTML = `${sub}<br><b>${score}</b> 分${record && score > 0 ? ' · 新纪录！' : ` · 最高 ${this.best}`}`
+    this.result = { score, title, sub, record, won }
+    this.renderText()
     this.card.hidden = false
     this.card.querySelector<HTMLButtonElement>('.g-again')!.focus()
     if (won) sound.win()

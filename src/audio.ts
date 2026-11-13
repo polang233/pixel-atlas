@@ -69,7 +69,9 @@ class Sound {
     this.listeners.add(fn)
   }
   private emit() {
-    this.listeners.forEach((f) => f())
+    this.listeners.forEach((f) => {
+      f()
+    })
   }
 
   unlock() {
@@ -135,7 +137,11 @@ class Sound {
   }
 
   /** one oscillator note with optional pitch slide */
-  tone(freq: number, dur: number, opts: { type?: OscillatorType; wave?: PeriodicWave; vol?: number; slide?: number; at?: number; attack?: number; dest?: AudioNode; vib?: number } = {}) {
+  tone(
+    freq: number,
+    dur: number,
+    opts: { type?: OscillatorType; wave?: PeriodicWave; vol?: number; slide?: number; at?: number; attack?: number; dest?: AudioNode; vib?: number } = {},
+  ) {
     if (!this.ready) return
     const t = this.now() + (opts.at ?? 0)
     const o = this.ctx!.createOscillator()
@@ -160,7 +166,10 @@ class Sound {
   }
 
   /** filtered noise burst with a filter sweep */
-  noise(dur: number, opts: { f0?: number; f1?: number; q?: number; type?: BiquadFilterType; vol?: number; at?: number; attack?: number; brown?: boolean } = {}) {
+  noise(
+    dur: number,
+    opts: { f0?: number; f1?: number; q?: number; type?: BiquadFilterType; vol?: number; at?: number; attack?: number; brown?: boolean } = {},
+  ) {
     if (!this.ready) return
     const t = this.now() + (opts.at ?? 0)
     const src = this.ctx!.createBufferSource()
@@ -180,7 +189,9 @@ class Sound {
 
   /** arpeggio */
   arp(notes: number[], step = 0.055, opts: { type?: OscillatorType; wave?: PeriodicWave; vol?: number; len?: number; dest?: AudioNode; at?: number } = {}) {
-    notes.forEach((n, i) => n && this.tone(n, opts.len ?? step * 1.6, { type: opts.type, wave: opts.wave, vol: opts.vol ?? 0.05, at: (opts.at ?? 0) + i * step, dest: opts.dest }))
+    notes.forEach((n, i) => {
+      n && this.tone(n, opts.len ?? step * 1.6, { type: opts.type, wave: opts.wave, vol: opts.vol ?? 0.05, at: (opts.at ?? 0) + i * step, dest: opts.dest })
+    })
   }
 
   /** seconds on the audio clock (falls back to the page clock before unlock) */
@@ -279,8 +290,12 @@ class Sound {
         // 16-bit era computers: sample-ish strings + echo, 8-bit DAC
         const d = this.jingleBus(8, 0.19)
         const mel = [67, 71, 74, 79, 78, 74, 76, 0, 79]
-        mel.forEach((m, i) => m && this.tone(N(m), 0.36, { type: 'triangle', vol: 0.55, at: i * 0.16, dest: d, vib: 0.006 }))
-        ;[43, 50, 47, 52].forEach((m, i) => this.tone(N(m), 0.62, { type: 'sawtooth', vol: 0.25, at: i * 0.36, dest: d }))
+        mel.forEach((m, i) => {
+          m && this.tone(N(m), 0.36, { type: 'triangle', vol: 0.55, at: i * 0.16, dest: d, vib: 0.006 })
+        })
+        ;[43, 50, 47, 52].forEach((m, i) => {
+          this.tone(N(m), 0.62, { type: 'sawtooth', vol: 0.25, at: i * 0.36, dest: d })
+        })
         this.tone(N(79) * 0.5, 1.2, { type: 'triangle', vol: 0.3, at: 1.28, dest: d, vib: 0.01 })
         break
       }
@@ -290,9 +305,15 @@ class Sound {
         const p25 = this.pulse(0.25)
         const p50 = this.pulse(0.5)
         const lead = [72, 76, 79, 84, 0, 83, 79, 81, 0, 84]
-        lead.forEach((m, i) => m && this.tone(N(m), 0.12, { wave: p25, vol: 0.6, at: i * 0.11, dest: d }))
-        ;[64, 67, 71, 67, 65, 69, 72, 69].forEach((m, i) => this.tone(N(m), 0.06, { wave: p50, vol: 0.3, at: i * 0.11 + 0.05, dest: d }))
-        ;[48, 48, 55, 53].forEach((m, i) => this.tone(N(m), 0.24, { type: 'triangle', vol: 0.7, at: i * 0.22, dest: d }))
+        lead.forEach((m, i) => {
+          m && this.tone(N(m), 0.12, { wave: p25, vol: 0.6, at: i * 0.11, dest: d })
+        })
+        ;[64, 67, 71, 67, 65, 69, 72, 69].forEach((m, i) => {
+          this.tone(N(m), 0.06, { wave: p50, vol: 0.3, at: i * 0.11 + 0.05, dest: d })
+        })
+        ;[48, 48, 55, 53].forEach((m, i) => {
+          this.tone(N(m), 0.24, { type: 'triangle', vol: 0.7, at: i * 0.22, dest: d })
+        })
         this.tone(N(84), 0.5, { wave: p25, vol: 0.5, at: 1.1, dest: d, vib: 0.02 })
         break
       }
@@ -305,8 +326,12 @@ class Sound {
         lp.frequency.value = 1500
         lp.Q.value = 0.4
         lp.connect(d)
-        ;[79, 0, 79, 83, 86, 0, 84, 83, 81, 79].forEach((m, i) => m && this.tone(N(m), 0.1, { wave: p12, vol: 0.9, at: i * 0.12, dest: lp }))
-        ;[55, 55, 50, 50, 52].forEach((m, i) => this.tone(N(m), 0.2, { type: 'triangle', vol: 0.6, at: i * 0.24, dest: lp }))
+        ;[79, 0, 79, 83, 86, 0, 84, 83, 81, 79].forEach((m, i) => {
+          m && this.tone(N(m), 0.1, { wave: p12, vol: 0.9, at: i * 0.12, dest: lp })
+        })
+        ;[55, 55, 50, 50, 52].forEach((m, i) => {
+          this.tone(N(m), 0.2, { type: 'triangle', vol: 0.6, at: i * 0.24, dest: lp })
+        })
         for (let i = 0; i < 6; i++) this.noise(0.03, { f0: 6000, type: 'highpass', vol: 0.05, at: i * 0.24 + 0.12 })
         this.tone(N(91), 0.35, { wave: p12, vol: 0.7, at: 1.25, dest: lp, slide: N(79) })
         break
@@ -314,7 +339,12 @@ class Sound {
       default: {
         // 1-bit beeper: one square voice, chords faked by very fast arpeggios
         const d = this.jingleBus(2)
-        const chords = [[60, 64, 67], [57, 60, 64], [53, 57, 60], [55, 59, 62]]
+        const chords = [
+          [60, 64, 67],
+          [57, 60, 64],
+          [53, 57, 60],
+          [55, 59, 62],
+        ]
         let t = 0
         chords.forEach((c) => {
           for (let k = 0; k < 9; k++) {
@@ -522,7 +552,7 @@ class Sound {
 
   ambience(name: AmbName | null) {
     this.wantedAmb = name
-    if (!this.ctx || this.ctx.state !== 'running') return
+    if (this.ctx?.state !== 'running') return
     if (this.amb?.name === name) return
     const old = this.amb
     if (old) {
@@ -554,7 +584,7 @@ class Sound {
     const ctx = this.ctx!
     const out = ctx.createGain()
     out.connect(this.ambBus)
-    const nodes: (AudioScheduledSourceNode)[] = []
+    const nodes: AudioScheduledSourceNode[] = []
     const timers: number[] = []
     const params: Record<string, (v: number) => void> = {}
     const osc = (type: OscillatorType, f: number, vol: number, dest: AudioNode = out) => {

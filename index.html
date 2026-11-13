@@ -1,29 +1,30 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07060c" />
-    <title>Pixel Atlas · 像素星图</title>
-    <meta name="description" content="数百万像素素材，汇于一处：可以搜索的星图、能玩的小世界，以及关于像素风格的一切。" />
-    <link rel="canonical" href="https://pixelatlas.org/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="zh_CN" />
-    <meta property="og:site_name" content="Pixel Atlas" />
-    <meta property="og:title" content="Pixel Atlas · 像素星图" />
-    <meta property="og:description" content="Millions of pixel-art resources, in one place. Every pixel a star." />
-    <meta property="og:url" content="https://pixelatlas.org/" />
-    <meta property="og:image" content="https://pixelatlas.org/social-card.png" />
-    <meta property="og:image:width" content="1280" />
-    <meta property="og:image:height" content="640" />
-    <meta property="og:image:alt" content="像素星图 Pixel Atlas：一面像素素材墙，旁边是 logo 和 pixelatlas.org" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@polang233" />
-    <meta name="twitter:creator" content="@polang233" />
-    <meta name="twitter:image" content="https://pixelatlas.org/social-card.png" />
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#07060c">
+    <title data-i18n="meta.title">Pixel Atlas · 像素星图</title>
+    <meta data-i18n-attr="content:meta.description" name="description" content="像素资源合集，从 140 万张 16×16 素材开始：一张可以搜索的星图，几个能玩的小世界，一间像素画工坊。">
+    <link rel="canonical" href="https://pixelatlas.org/">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="zh_CN">
+    <meta property="og:locale:alternate" content="en_US">
+    <meta property="og:site_name" content="Pixel Atlas">
+    <meta data-i18n-attr="content:meta.shareTitle" property="og:title" content="Pixel Atlas · 像素星图">
+    <meta data-i18n-attr="content:meta.shareDescription" property="og:description" content="Millions of pixel-art resources, in one place. Every pixel a star.">
+    <meta property="og:url" content="https://pixelatlas.org/">
+    <meta property="og:image" content="https://pixelatlas.org/social-card.png">
+    <meta property="og:image:width" content="1280">
+    <meta property="og:image:height" content="640">
+    <meta data-i18n-attr="content:meta.imageAlt" property="og:image:alt" content="像素星图 Pixel Atlas：一面像素素材墙，旁边是 logo 和 pixelatlas.org">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@polang233">
+    <meta name="twitter:creator" content="@polang233">
+    <meta name="twitter:image" content="https://pixelatlas.org/social-card.png">
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -38,25 +39,36 @@
         "sameAs": ["https://github.com/polang233/pixel-atlas", "https://x.com/polang233"]
       }
     </script>
+
+    <link href="https://pixelatlas.org/" hreflang="zh-CN" rel="alternate">
+    <link href="https://pixelatlas.org/en/" hreflang="en" rel="alternate">
+    <link href="https://pixelatlas.org/" hreflang="x-default" rel="alternate">
   </head>
   <body>
     <div id="app">
       <header class="topbar">
-        <a class="logo" href="#hero" aria-label="Pixel Atlas"><img class="mark" src="/logo.svg" width="32" height="32" alt="" /><b>PIXEL<span>·</span>ATLAS</b></a>
-        <nav class="topnav" aria-label="主导航">
-          <button type="button" data-go="hero">星图</button>
-          <button type="button" data-go="worlds">世界</button>
-          <button type="button" data-go="workshop">共创工坊</button>
-          <button type="button" data-go="outro">获取</button>
+        <a data-i18n-attr="aria-label:brand.label" class="logo" href="#hero" aria-label="Pixel Atlas"><img class="mark" src="/logo.svg" width="32" height="32" alt=""><b data-i18n-html="brand.logoHtml">PIXEL<span>·</span>ATLAS</b></a>
+        <nav data-i18n-attr="aria-label:nav.label" class="topnav" aria-label="主导航">
+          <button data-i18n="nav.atlas" type="button" data-go="hero">星图</button>
+          <button data-i18n="nav.worlds" type="button" data-go="worlds">世界</button>
+          <button data-i18n="nav.workshop" type="button" data-go="workshop">共创工坊</button>
+          <button data-i18n="nav.get" type="button" data-go="outro">获取</button>
         </nav>
-        <a class="gh-link" href="https://github.com/polang233/pixel-atlas" target="_blank" rel="noopener" aria-label="GitHub 仓库" title="GitHub 仓库"><svg viewBox="0 0 12 12" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM2 1h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM6 2h1v1h-1zM7 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM1 3h1v1h-1zM10 3h1v1h-1zM0 4h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM0 5h1v1h-1zM1 5h1v1h-1zM10 5h1v1h-1zM11 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM10 6h1v1h-1zM11 6h1v1h-1zM1 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM10 8h1v1h-1zM0 9h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM1 10h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM2 11h1v1h-1zM4 11h1v1h-1zM7 11h1v1h-1zM9 11h1v1h-1z"/></svg></a>
-        <button class="snd-btn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span>点我开声音</span></button>
+        <div class="topbar-tools">
+          <a data-i18n-attr="aria-label:nav.github; title:nav.github" class="gh-link" href="https://github.com/polang233/pixel-atlas" target="_blank" rel="noopener" aria-label="GitHub 仓库" title="GitHub 仓库"><svg viewBox="0 0 12 12" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM2 1h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM6 2h1v1h-1zM7 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM1 3h1v1h-1zM10 3h1v1h-1zM0 4h1v1h-1zM1 4h1v1h-1zM10 4h1v1h-1zM11 4h1v1h-1zM0 5h1v1h-1zM1 5h1v1h-1zM10 5h1v1h-1zM11 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM10 6h1v1h-1zM11 6h1v1h-1zM1 7h1v1h-1zM10 7h1v1h-1zM1 8h1v1h-1zM2 8h1v1h-1zM9 8h1v1h-1zM10 8h1v1h-1zM0 9h1v1h-1zM2 9h1v1h-1zM3 9h1v1h-1zM8 9h1v1h-1zM9 9h1v1h-1zM10 9h1v1h-1zM1 10h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM8 10h1v1h-1zM9 10h1v1h-1zM10 10h1v1h-1zM2 11h1v1h-1zM4 11h1v1h-1zM7 11h1v1h-1zM9 11h1v1h-1z" /></svg></a>
+          <nav class="lang-switch pix" aria-label="语言 / Language" data-i18n-attr="aria-label:lang.label">
+            <a href="/" hreflang="zh-CN" lang="zh-CN" data-locale="zh-CN" aria-current="true" title="简体中文" aria-label="切换到中文" data-i18n="lang.zhLabel" data-i18n-attr="title:lang.zhName; aria-label:lang.zhSwitch">中</a>
+            <a href="/en/" hreflang="en" lang="en" data-locale="en" title="English" aria-label="Switch to English" data-i18n="lang.enLabel" data-i18n-attr="title:lang.enName; aria-label:lang.enSwitch">EN</a>
+          </nav>
+          <button data-i18n-attr="aria-label:sound.unlock; title:sound.unlock" title="点我开声音" aria-label="点我开声音" class="snd-btn" type="button" aria-pressed="false"><i aria-hidden="true"></i><span data-i18n="sound.unlock">点我开声音</span></button>
+        </div>
+
       </header>
 
-      <nav class="worldbar pix" aria-label="世界" hidden>
-        <button type="button" class="wb-step" data-step="-1" aria-label="上一个世界">◀</button>
+      <nav data-i18n-attr="aria-label:nav.worlds" class="worldbar pix" aria-label="世界" hidden>
+        <button data-i18n-attr="aria-label:nav.prevWorld" type="button" class="wb-step" data-step="-1" aria-label="上一个世界">◀</button>
         <div class="worldbar-list"></div>
-        <button type="button" class="wb-step" data-step="1" aria-label="下一个世界">▶</button>
+        <button data-i18n-attr="aria-label:nav.nextWorld" type="button" class="wb-step" data-step="1" aria-label="下一个世界">▶</button>
       </nav>
 
       <button type="button" class="nextbar pix" hidden>
@@ -69,114 +81,115 @@
 
       <main id="stage">
         <!-- 00 星图 -->
-        <section class="chapter ch-hero" data-id="hero" aria-label="星图">
-          <canvas class="hero-gl" data-own-touch aria-label="140 万张素材按平均色分成八块陆地的世界地图，可拖动、缩放、点击；缩到最小会合拢成一颗星球"></canvas>
+        <section data-i18n-attr="aria-label:nav.atlas" class="chapter ch-hero" data-id="hero" aria-label="星图">
+          <canvas data-i18n-attr="aria-label:hero.mapLabel" class="hero-gl" data-own-touch="" aria-label="140 万张素材按平均色分成八块陆地的世界地图，可拖动、缩放、点击；缩到最小会合拢成一颗星球"></canvas>
           <div class="hero-reticle" hidden><i></i><i></i><i></i><i></i></div>
           <div class="hero-hover" hidden></div>
           <div class="hero-tip pix" hidden></div>
           <div class="hero-labels pix" aria-hidden="true"></div>
-          <div class="hero-gather" role="group" aria-label="搜索结果"></div>
+          <div data-i18n-attr="aria-label:hero.results" class="hero-gather" role="group" aria-label="搜索结果"></div>
 
           <div class="hero-panel">
-            <p class="eyebrow">VOL.1 · 1,409,404 SPRITES</p>
-            <div class="hero-lock"><img class="mark" src="/logo.svg" width="96" height="96" alt="" /><h1>PIXEL<br />ATLAS</h1></div>
-            <button type="button" class="hero-logo pix" title="回到全图">PIXEL·ATLAS</button>
-            <p class="hero-sub">像素星图 · <b>140 万</b>张 16×16 素材</p>
-            <p class="hero-intro">每一格是一张素材，按平均色住在自己颜色的陆地上：灰色聚成中间的岛，彩色按色相围成一圈。暖色的陆地最大，因为游戏世界里最多的是木头、皮革和火光。</p>
+            <p data-i18n="hero.eyebrow" class="eyebrow">VOL.1 · 1,409,404 SPRITES</p>
+            <div class="hero-lock"><img class="mark" src="/logo.svg" width="96" height="96" alt=""><h1 data-i18n-html="brand.headingHtml">PIXEL<br>ATLAS</h1></div>
+            <button data-i18n="brand.name" data-i18n-attr="title:hero.home" type="button" class="hero-logo pix" title="回到全图">PIXEL·ATLAS</button>
+            <p data-i18n-html="hero.subHtml" class="hero-sub">像素星图 · <b>140 万</b>张 16×16 素材</p>
+            <p data-i18n="hero.intro" class="hero-intro">每一格是一张素材，按平均色住在自己颜色的陆地上：灰色聚成中间的岛，彩色按色相围成一圈。暖色的陆地最大，因为游戏世界里最多的是木头、皮革和火光。</p>
             <form class="hero-search" autocomplete="off" role="search">
               <span class="pix" aria-hidden="true">&gt;</span>
-              <input type="search" name="q" placeholder="搜索：史莱姆 / sword / 蓝色宝箱 / #ff4d6d" aria-label="搜索素材" enterkeyhint="go" />
-              <button type="button" class="dice pix" title="随机飞到一张">随机</button>
+              <input data-i18n-attr="placeholder:hero.searchPlaceholder; aria-label:hero.searchLabel" type="search" name="q" placeholder="搜索：史莱姆 / sword / 蓝色宝箱 / #ff4d6d" aria-label="搜索素材" enterkeyhint="go">
+              <button data-i18n="hero.random" data-i18n-attr="title:hero.randomTitle" type="button" class="dice pix" title="随机飞到一张">随机</button>
             </form>
             <p class="hero-crumb pix"></p>
-            <div class="hero-legend pix" role="group" aria-label="八块陆地"></div>
+            <div data-i18n-attr="aria-label:hero.lands" class="hero-legend pix" role="group" aria-label="八块陆地"></div>
             <div class="hero-suggest">
-              <span class="dim pix">试试</span>
-              <button type="button" class="chip" data-q="史莱姆">史莱姆</button>
-              <button type="button" class="chip" data-q="宝箱">宝箱</button>
-              <button type="button" class="chip" data-q="蘑菇">蘑菇</button>
-              <button type="button" class="chip" data-q="紫色 药水">紫色药水</button>
-              <button type="button" class="chip" data-q="cat">cat</button>
-              <button type="button" class="chip" data-q="#ff4d6d"><i class="sw" style="background:#ff4d6d"></i>#ff4d6d</button>
+              <span data-i18n="hero.try" class="dim pix">试试</span>
+              <button data-i18n-attr="data-q:hero.suggest.slime" data-i18n="hero.suggest.slime" type="button" class="chip" data-q="史莱姆">史莱姆</button>
+              <button data-i18n-attr="data-q:hero.suggest.chest" data-i18n="hero.suggest.chest" type="button" class="chip" data-q="宝箱">宝箱</button>
+              <button data-i18n-attr="data-q:hero.suggest.mushroom" data-i18n="hero.suggest.mushroom" type="button" class="chip" data-q="蘑菇">蘑菇</button>
+              <button data-i18n-attr="data-q:hero.suggest.potionQuery" data-i18n="hero.suggest.potion" type="button" class="chip" data-q="紫色 药水">紫色药水</button>
+              <button data-i18n-attr="data-q:hero.suggest.cat" data-i18n="hero.suggest.cat" type="button" class="chip" data-q="cat">cat</button>
+              <button data-i18n-attr="data-q:hero.suggest.hex" data-i18n-html="hero.suggest.hexHtml" type="button" class="chip" data-q="#ff4d6d"><i class="sw" style="background:#ff4d6d"></i>#ff4d6d</button>
             </div>
             <p class="hero-status pix" role="status"></p>
             <div class="hero-subjects"></div>
             <div class="hero-tray"></div>
             <div class="hero-step" hidden>
-              <button type="button" class="chip hot" data-gather>◎ 聚到一起</button>
-              <button type="button" class="chip" data-step="-1">◀ 上一张</button>
-              <button type="button" class="chip" data-step="1">下一张 ▶</button>
-              <span class="dim pix">回车也行</span>
+              <button data-i18n="hero.gather" type="button" class="chip hot" data-gather="">◎ 聚到一起</button>
+              <button data-i18n="hero.batch" type="button" class="chip" data-act="batch" hidden>⇩ 下载这一批</button>
+              <button data-i18n="hero.prev" type="button" class="chip" data-step="-1">◀ 上一张</button>
+              <button data-i18n="hero.next" type="button" class="chip" data-step="1">下一张 ▶</button>
+              <span data-i18n="hero.enter" class="dim pix">回车也行</span>
             </div>
           </div>
 
           <aside class="hero-card" hidden>
-            <button type="button" class="card-x" data-act="close" aria-label="关闭">×</button>
+            <button data-i18n-attr="aria-label:common.close" type="button" class="card-x" data-act="close" aria-label="关闭">×</button>
             <canvas width="16" height="16"></canvas>
             <p class="cap pix"></p>
             <p class="meta"></p>
             <div class="btns">
-              <button type="button" class="chip hot" data-act="workshop">放进工坊 →</button>
-              <button type="button" class="chip" data-act="png">下载 PNG</button>
-              <button type="button" class="chip" data-act="same">找同类</button>
+              <button data-i18n="hero.edit" type="button" class="chip hot" data-act="workshop">放进工坊 →</button>
+              <button data-i18n="hero.download" data-i18n-attr="title:hero.downloadTitle" type="button" class="chip" data-act="png" title="16×16 原图">下载 PNG</button>
+              <button data-i18n="hero.downloadBig" data-i18n-attr="title:hero.downloadBigTitle" type="button" class="chip" data-act="png-big" title="256×256 放大版">放大 ×16</button>
+              <button data-i18n="hero.similar" type="button" class="chip" data-act="same">找同类</button>
             </div>
           </aside>
 
-          <div class="hero-lod pix" aria-hidden="true">
-            <ol><li>世界</li><li>色块</li><li>缩略</li><li>原图</li></ol>
-            <p class="hero-tech"></p>
+          <div class="hero-lod pix">
+            <ol data-i18n-attr="aria-label:hero.lod.label" aria-label="跳到缩放层级"><li><button data-i18n="hero.lod.world" type="button" data-lod="0" aria-pressed="true">地图</button></li><li><button data-i18n="hero.lod.colour" type="button" data-lod="1" aria-pressed="false">色块</button></li><li><button data-i18n="hero.lod.thumbnail" type="button" data-lod="2" aria-pressed="false">缩略</button></li><li><button data-i18n="hero.lod.full" type="button" data-lod="3" aria-pressed="false">原图</button></li></ol>
+            <p class="hero-tech" aria-hidden="true"></p>
           </div>
           <p class="hero-hint pix"></p>
-          <div class="hero-zoom pix" role="group" aria-label="缩放">
-            <button type="button" data-zoom="in" aria-label="放大">+</button>
-            <button type="button" data-zoom="out" aria-label="缩小">−</button>
-            <button type="button" data-zoom="fit" aria-label="回到全图" title="回到全图 (0)">◎</button>
-            <button type="button" data-zoom="planet" aria-label="在星球和地图之间切换" title="合拢成星球 / 展开成地图">◐</button>
+          <div data-i18n-attr="aria-label:hero.zoom" class="hero-zoom pix" role="group" aria-label="缩放">
+            <button data-i18n-attr="aria-label:hero.zoomIn" type="button" data-zoom="in" aria-label="放大">+</button>
+            <button data-i18n-attr="aria-label:hero.zoomOut" type="button" data-zoom="out" aria-label="缩小">−</button>
+            <button data-i18n-attr="aria-label:hero.toPlanet; title:hero.toPlanetTitle" type="button" data-zoom="view" data-view="planet" aria-keyshortcuts="0" aria-label="合拢成星球" title="合拢成星球 (0)">◐</button>
           </div>
         </section>
 
 
         <!-- W1 弹力 -->
-        <section class="chapter ch-cart" data-id="cart" aria-label="弹力">
-          <div class="bn-stage" data-own-touch>
-            <canvas class="bn-canvas" aria-label="一屋子有重量的素材：可以抓起来扔，落地会压扁"></canvas>
+        <section data-i18n-attr="aria-label:world.cart" class="chapter ch-cart" data-id="cart" aria-label="弹力">
+          <div class="bn-stage" data-own-touch="">
+            <canvas data-i18n-attr="aria-label:cart.canvasLabel" class="bn-canvas" aria-label="一屋子有重量的素材：可以抓起来扔，落地会压扁"></canvas>
           </div>
           <div class="cart-copy world-copy">
-            <p class="eyebrow pix">WORLD 01 · BOUNCE</p>
-            <h2 class="pix">弹力</h2>
-            <p>像素角色只有十几格高，没地方画表情，生命感全靠<b>形变</b>：起跳前先拉长，落地时压扁，再弹回原样。压多少、回弹几下，就是这个角色的“重量”和“性格”。再加上几帧残影和一撮尘土，一张不会动的图就活了。</p>
-            <p class="world-hint pix">抓起一个扔出去 · 点空白处再掉一个下来 · 关掉下面任意一项再扔一次</p>
-            <div class="fx-row" role="group" aria-label="弹力的四种成分">
-              <button type="button" class="chip" data-bn="squash" aria-pressed="true">挤压拉伸</button>
-              <button type="button" class="chip" data-bn="trail" aria-pressed="true">残影</button>
-              <button type="button" class="chip" data-bn="dust" aria-pressed="true">尘土</button>
-              <button type="button" class="chip" data-bn="lowfps" aria-pressed="false">每秒 12 帧</button>
+            <p data-i18n="cart.eyebrow" class="eyebrow pix">WORLD 01 · BOUNCE</p>
+            <h2 data-i18n="world.cart" class="pix">弹力</h2>
+            <p data-i18n-html="cart.introHtml">像素角色只有十几格高，没地方画表情，生命感全靠<b>形变</b>：起跳前先拉长，落地时压扁，再弹回原样。压多少、回弹几下，就是这个角色的“重量”和“性格”。再加上几帧残影和一撮尘土，一张不会动的图就活了。</p>
+            <p data-i18n="cart.hint" class="world-hint pix">抓起一个扔出去 · 点空白处再掉一个 · 关掉下面一项再扔</p>
+            <div data-i18n-attr="aria-label:cart.effects" class="fx-row" role="group" aria-label="弹力的四种成分">
+              <button data-i18n="cart.squash" type="button" class="chip" data-bn="squash" aria-pressed="true">挤压拉伸</button>
+              <button data-i18n="cart.trail" type="button" class="chip" data-bn="trail" aria-pressed="true">残影</button>
+              <button data-i18n="cart.dust" type="button" class="chip" data-bn="dust" aria-pressed="true">尘土</button>
+              <button data-i18n="cart.lowfps" type="button" class="chip" data-bn="lowfps" aria-pressed="false">每秒 12 帧</button>
             </div>
             <div class="world-actions">
-              <button type="button" class="chip hot game-start">▶ 玩一局：越滚越大</button>
+              <button data-i18n="cart.play" type="button" class="chip hot game-start">▶ 玩一局：越滚越大</button>
             </div>
-            <p class="game-howto pix dim">移动鼠标或 <kbd>←</kbd><kbd>→</kbd> 瞄准，点击或 <kbd>空格</kbd> 丢下去 · 两个一样的撞在一起会合成更大的 · 堆过虚线就结束</p>
-            <div class="bn-ladder" aria-label="合成顺序"></div>
+            <p data-i18n-html="cart.howtoHtml" class="game-howto pix dim">移动鼠标或 <kbd>←</kbd><kbd>→</kbd> 瞄准，点击或 <kbd>空格</kbd> 丢下去 · 两个一样的撞在一起会合成更大的 · 堆过虚线就结束</p>
+            <div data-i18n-attr="aria-label:cart.ladder" class="bn-ladder" aria-label="合成顺序"></div>
           </div>
         </section>
 
         <!-- 03 工坊 -->
-        <section class="chapter ch-workshop" data-id="workshop" aria-label="共创工坊">
+        <section data-drop-hint="松手，把它变成 16×16" data-i18n-attr="aria-label:nav.workshop; data-drop-hint:workshop.drop" class="chapter ch-workshop" data-id="workshop" aria-label="共创工坊">
           <div class="ws-head">
-            <p class="eyebrow pix">CO-CREATE · WORKSHOP</p>
-            <h2 class="pix">共创工坊</h2>
+            <p data-i18n="workshop.eyebrow" class="eyebrow pix">CO-CREATE · WORKSHOP</p>
+            <h2 data-i18n="nav.workshop" class="pix">共创工坊</h2>
           </div>
-          <nav class="ws-tools" aria-label="工具">
-            <button type="button" data-tool="depth"><b>01</b>色深</button>
-            <button type="button" data-tool="light"><b>02</b>高光</button>
-            <button type="button" data-tool="outline"><b>03</b>描边</button>
-            <button type="button" data-tool="swap"><b>04</b>换色</button>
-            <button type="button" data-tool="scale"><b>05</b>放大</button>
-            <button type="button" data-tool="rotate"><b>06</b>旋转</button>
-            <button type="button" data-tool="juice"><b>07</b>打击感</button>
+          <nav data-i18n-attr="aria-label:workshop.tools" class="ws-tools" aria-label="工具">
+            <button type="button" data-tool="depth"><b>01</b><span data-i18n="workshop.depth.name">色深</span></button>
+            <button type="button" data-tool="light"><b>02</b><span data-i18n="workshop.light.name">高光</span></button>
+            <button type="button" data-tool="outline"><b>03</b><span data-i18n="workshop.outline.name">描边</span></button>
+            <button type="button" data-tool="swap"><b>04</b><span data-i18n="workshop.swap.name">换色</span></button>
+            <button type="button" data-tool="scale"><b>05</b><span data-i18n="workshop.scale.name">放大</span></button>
+            <button type="button" data-tool="rotate"><b>06</b><span data-i18n="workshop.rotate.name">旋转</span></button>
+            <button type="button" data-tool="juice"><b>07</b><span data-i18n="workshop.juice.name">打击感</span></button>
           </nav>
           <div class="ws-stage">
-            <div class="ws-canvas-wrap" data-own-touch>
+            <div class="ws-canvas-wrap" data-own-touch="">
               <canvas class="ws-main"></canvas>
               <canvas class="ws-fx"></canvas>
               <i class="ws-sun" hidden></i>
@@ -184,51 +197,51 @@
             <p class="ws-label pix dim"></p>
             <div class="ws-extra"></div>
           </div>
-          <div class="ws-side" data-own-touch data-scroll>
+          <div class="ws-side" data-own-touch="" data-scroll="">
             <h3 class="ws-tool-name pix"></h3>
             <p class="ws-tool-desc"></p>
             <div class="ws-controls"></div>
             <p class="ws-stat pix"></p>
-            <p class="dim pix ws-tray-label">换一张素材，或者用你自己的</p>
+            <p data-i18n="workshop.tray" class="dim pix ws-tray-label">换一张素材，或者用你自己的</p>
             <div class="ws-import-row">
-              <button type="button" class="chip hot ws-import">＋ 导入图片</button>
-              <input type="file" class="ws-file" accept="image/*" hidden />
+              <button data-i18n="workshop.import" type="button" class="chip hot ws-import">＋ 导入图片</button>
+              <input type="file" class="ws-file" accept="image/*" hidden>
             </div>
-            <p class="ws-import-note pix dim">也可以把图片拖进来，或直接粘贴 · 任何图片都会缩成 16×16 · 只在你的浏览器里处理，不上传</p>
+            <p data-i18n="workshop.importNote" class="ws-import-note pix dim">拖入或粘贴也行 · 自动缩成 16×16 · 只在本地处理，不上传</p>
             <div class="ws-tray"></div>
-            <button type="button" class="chip ws-export">下载当前结果 PNG</button>
+            <button data-i18n="workshop.export" type="button" class="chip ws-export">下载 PNG</button>
           </div>
         </section>
 
         <!-- 04 地牢 -->
-        <section class="chapter ch-dungeon" data-id="dungeon" aria-label="地牢">
+        <section data-i18n-attr="aria-label:world.dungeon" class="chapter ch-dungeon" data-id="dungeon" aria-label="地牢">
           <div class="dungeon-floor"></div>
           <div class="dungeon-planted"></div>
           <canvas class="dungeon-dark"></canvas>
           <div class="dungeon-copy world-copy">
-            <p class="eyebrow pix">WORLD 02 · DUNGEON</p>
-            <h2 class="pix">地牢</h2>
-            <p>黑暗是地牢最好的调色板。石墙压成冷蓝灰，火光推成暖橙——<b>冷暗部、暖高光</b>。光照不到的地方不用画，玩家会自己把它想象得更可怕；光源越少，人越想往前走。</p>
-            <p class="world-hint pix">移动鼠标：你就是火把 · 点击地面插一支 · <span class="dungeon-count"></span></p>
-            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：摸黑寻宝</button></div>
-            <p class="game-howto pix dim"><kbd>WASD</kbd> 走 · <kbd>空格</kbd> 挥剑 · <kbd>E</kbd> 开箱、拜神像（鼠标：点哪砍哪，按住带路）· 三颗心是命，火把是视野 · 砸木桶、躲地刺、找钥匙开门</p>
+            <p data-i18n="dungeon.eyebrow" class="eyebrow pix">WORLD 02 · DUNGEON</p>
+            <h2 data-i18n="world.dungeon" class="pix">地牢</h2>
+            <p data-i18n-html="dungeon.introHtml">地牢的颜色由光来分：石墙压成冷蓝灰，火光推成暖橙，<b>暗部冷、高光暖</b>。光照不到的地方不用画，玩家会自己补上更可怕的东西。</p>
+            <p class="world-hint pix"><span data-i18n="dungeon.hint">移动鼠标：你就是火把 · 点击地面插一支 · </span><span class="dungeon-count"></span></p>
+            <div class="world-actions"><button data-i18n="dungeon.play" type="button" class="chip hot game-start">▶ 玩一局：摸黑寻宝</button></div>
+            <p data-i18n-html="dungeon.howtoHtml" class="game-howto pix dim"><kbd>WASD</kbd> 走 · <kbd>空格</kbd> 挥剑 · <kbd>E</kbd> 开箱 / 拜神像 · 鼠标：点击砍，按住走 · 找钥匙开门，别让火把灭</p>
           </div>
           <div class="dungeon-tip pix" role="status"></div>
-          <canvas class="dungeon-game" data-own-touch hidden></canvas>
+          <canvas class="dungeon-game" data-own-touch="" hidden></canvas>
           <p class="dungeon-say pix" role="status"></p>
         </section>
 
         <!-- 05 深海 -->
-        <section class="chapter ch-ocean" data-id="ocean" aria-label="深海">
-          <canvas class="oc-canvas" data-own-touch></canvas>
+        <section data-i18n-attr="aria-label:world.ocean" class="chapter ch-ocean" data-id="ocean" aria-label="深海">
+          <canvas class="oc-canvas" data-own-touch=""></canvas>
           <div class="oc-copy world-copy">
-            <p class="eyebrow pix">WORLD 03 · DEEP SEA</p>
-            <h2 class="pix">深海</h2>
+            <p data-i18n="ocean.eyebrow" class="eyebrow pix">WORLD 03 · DEEP SEA</p>
+            <h2 data-i18n="world.ocean" class="pix">深海</h2>
             <p class="oc-zone pix"></p>
             <p class="oc-desc"></p>
-            <p class="world-hint pix">向下滚动下潜 · 点击水面发出声呐</p>
-            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：大鱼吃小鱼</button></div>
-            <p class="game-howto pix dim">鼠标带路（或 <kbd>方向键</kbd>）· 吃比你小的，躲开比你大的 · 越长越大，潜得越深</p>
+            <p data-i18n="ocean.hint" class="world-hint pix">向下滚动下潜 · 点击水面发出声呐</p>
+            <div class="world-actions"><button data-i18n="ocean.play" type="button" class="chip hot game-start">▶ 玩一局：大鱼吃小鱼</button></div>
+            <p data-i18n-html="ocean.howtoHtml" class="game-howto pix dim">鼠标带路（或 <kbd>方向键</kbd>）· 吃比你小的，躲开比你大的 · 越长越大，潜得越深</p>
           </div>
           <div class="oc-meter pix" aria-hidden="true">
             <div class="oc-ruler"><span style="top:0">0</span><span style="top:5%">200</span><span style="top:25%">1000</span><span style="top:75%">3000</span><span style="top:100%">4000</span><i class="oc-marker"></i></div>
@@ -237,86 +250,135 @@
         </section>
 
         <!-- 06 霓虹 -->
-        <section class="chapter ch-neon" data-id="neon" aria-label="霓虹">
-          <canvas class="neon-canvas" data-own-touch></canvas>
+        <section data-i18n-attr="aria-label:world.neon" class="chapter ch-neon" data-id="neon" aria-label="霓虹">
+          <canvas class="neon-canvas" data-own-touch=""></canvas>
           <div class="neon-copy world-copy">
-            <p class="eyebrow pix">WORLD 04 · NEON</p>
-            <h2 class="pix">霓虹</h2>
-            <p>霓虹风把颜色收成几种高饱和的光——洋红、青、紫——其余全压进黑里。每块招牌都是程序把一张素材“霓虹化”的结果：只留轮廓和最强的内边，再加一圈光晕。像素的硬边，正好就是灯管。</p>
-            <p class="world-hint pix">街道自己在打拍子：按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> 或点车道随手跟弹 · 靠近招牌通电 · <span class="neon-count"></span></p>
+            <p data-i18n="neon.eyebrow" class="eyebrow pix">WORLD 04 · NEON</p>
+            <h2 data-i18n="world.neon" class="pix">霓虹</h2>
+            <p data-i18n="neon.intro">霓虹风只留几种高饱和的光：洋红、青、紫，其余全压进黑里。每块招牌都是一张素材“霓虹化”后的样子：只留轮廓和最强的内边，再加一圈光晕。像素的硬边，正好当灯管。</p>
+            <p class="world-hint pix"><span data-i18n-html="neon.hintHtml">街道在打拍子：按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> 或点车道跟弹 · 鼠标靠近招牌就通电 · </span><span class="neon-count"></span></p>
             <div class="world-actions">
-              <button type="button" class="chip hot game-start">▶ 玩一局：节拍通电</button>
-              <button type="button" class="chip neon-raw" aria-pressed="false">看原图</button>
+              <button data-i18n="neon.play" type="button" class="chip hot game-start">▶ 玩一局：节拍通电</button>
+              <button data-i18n="neon.showRaw" type="button" class="chip neon-raw" aria-pressed="false">看原图</button>
             </div>
-            <p class="game-howto pix dim">灯条冲到线上时按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd>（或点那条车道）· 每连击 10 次，全城过载一次</p>
+            <p data-i18n-html="neon.howtoHtml" class="game-howto pix dim">素材冲到线上时按 <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd>（或点那条车道）· 打中的会飞上楼变成招牌 · 每连击 10 次，全城过载一次</p>
           </div>
           <p class="neon-judge pix" hidden></p>
           <div class="neon-tip" hidden></div>
         </section>
 
         <!-- 07 克苏鲁 -->
-        <section class="chapter ch-cthulhu" data-id="cthulhu" aria-label="克苏鲁">
+        <section data-i18n-attr="aria-label:world.cthulhu" class="chapter ch-cthulhu" data-id="cthulhu" aria-label="克苏鲁">
           <svg class="defs" width="0" height="0" aria-hidden="true">
             <filter id="madness">
-              <feTurbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="2" seed="3" result="n" />
-              <feDisplacementMap in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G" />
+              <feturbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="2" seed="3" result="n" />
+              <fedisplacementmap in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G" />
             </filter>
           </svg>
           <div class="cth-field"></div>
           <div class="cth-copy world-copy">
-            <p class="eyebrow pix">WORLD 05 · COSMIC HORROR</p>
-            <h2 class="pix glitch" data-text="不可名状">不可名状</h2>
-            <p class="cth-text" data-src="克苏鲁风格从不把怪物画清楚。低饱和的墨绿与淤紫、不对称的轮廓、多出来的眼睛——16×16 的模糊恰好替你留白，剩下的交给玩家的想象。"></p>
-            <div class="san"><span class="pix">SAN</span><div class="san-bar"><i></i></div><b class="pix san-num">100</b></div>
-            <p class="world-hint pix cth-hint">继续向下……如果你确定的话</p>
-            <div class="world-actions"><button type="button" class="chip hot game-start">▶ 玩一局：别被看见</button></div>
-            <p class="game-howto pix dim">按住 <kbd>空格</kbd> 或屏幕前进 · 眼睛一睁就松手 · 身后的潮水不会停 · 蜡烛回理智，护符值 300 分但会吵醒它</p>
+            <p data-i18n="cthulhu.eyebrow" class="eyebrow pix">WORLD 05 · COSMIC HORROR</p>
+            <h2 data-i18n-attr="data-text:cthulhu.heading" data-i18n="cthulhu.heading" class="pix glitch" data-text="不可名状">不可名状</h2>
+            <p data-i18n-attr="data-src:cthulhu.intro" class="cth-text" data-src="克苏鲁风格从不把怪物画清楚：低饱和的墨绿和淤紫，不对称的轮廓，多出来的眼睛。16×16 本来就看不清，正好留给玩家去想。"></p>
+            <div class="san"><span data-i18n="cthulhu.san" class="pix">SAN</span><div class="san-bar"><i></i></div><b class="pix san-num">100</b></div>
+            <p data-i18n="cthulhu.hint" class="world-hint pix cth-hint">继续向下……如果你确定的话</p>
+            <div class="world-actions"><button data-i18n="cthulhu.play" type="button" class="chip hot game-start">▶ 玩一局：破封</button></div>
+            <p data-i18n-html="cthulhu.howtoHtml" class="game-howto pix dim">鼠标或 <kbd>←</kbd><kbd>→</kbd> 推祭坛 · 点击或 <kbd>空格</kbd> 放出魂火 · 魂火落回祭坛前连碎几块，分数翻倍 · 接住圣物，躲开发紫的诅咒 · 漏掉魂火、被眼睛盯上都会掉 SAN</p>
           </div>
-          <div class="cth-play" data-own-touch hidden>
-            <canvas class="cth-game" aria-label="别被看见：眼睛闭着时前进，睁开时站住"></canvas>
+          <div class="cth-play" data-own-touch="" hidden>
+            <canvas data-i18n-attr="aria-label:cthulhu.canvasLabel" class="cth-game" data-own-touch="" tabindex="0" aria-label="破封：用祭坛把魂火弹向符文墙"></canvas>
             <p class="cth-say pix" role="status"></p>
           </div>
         </section>
 
         <!-- 08 带走 -->
-        <section class="chapter ch-outro" data-id="outro" aria-label="带走">
+        <section data-i18n-attr="aria-label:outro.title" class="chapter ch-outro" data-id="outro" aria-label="带走">
           <div class="outro-rain"></div>
-          <div class="outro-box" data-scroll>
-            <p class="eyebrow pix">GET · 背包</p>
-            <h2 class="pix">带走它们</h2>
-            <p>140 万张素材随原数据集以 CC0 发布，拿去用之前看一眼右下角的许可说明。下面是它们接下来的几个去处，有的还在路上。</p>
+          <div class="outro-box" data-scroll="">
+            <p data-i18n="outro.eyebrow" class="eyebrow pix" lang="en">GET · CC0 SPRITES</p>
+            <h2 data-i18n="outro.heading" class="pix">带走它们</h2>
+            <p data-i18n="outro.intro" class="outro-intro">素材以 CC0 发布。要一张、一批还是全部，都在这里。</p>
             <div class="outro-cards">
-              <article class="outro-card">
-                <h3 class="pix">GitHub 图集</h3>
-                <p>按颜色分块的 PNG 图集 + JSON 元数据，Releases 直接下载。</p>
-                <span class="tag pix">建设中</span>
+              <article class="outro-card is-one">
+                <div class="outro-card-head">
+                  <h3 data-i18n="outro.one.title" class="pix">一张</h3>
+                  <span class="outro-kicker pix" aria-hidden="true">01</span>
+                </div>
+                <div class="outro-card-content">
+                  <button data-i18n-attr="aria-label:outro.one.shuffle" type="button" class="outro-sprite" aria-label="换一张"><img width="80" height="80" alt=""></button>
+                  <div class="outro-card-copy">
+                    <p data-i18n="outro.one.desc">在星图里点开一张素材，下载 16×16 原图，或放大 16 倍的版本。</p>
+                    <button data-i18n="outro.one.go" type="button" class="chip" data-outro-search>去星图挑 ↖</button>
+                  </div>
+                </div>
               </article>
-              <article class="outro-card">
-                <h3 class="pix">命令行</h3>
-                <p><code>npx pixel-atlas search slime --png</code></p>
-                <button type="button" class="chip" data-copy="npx pixel-atlas search slime --png">复制</button>
+              <article class="outro-card is-batch">
+                <div class="outro-card-head">
+                  <h3 data-i18n="outro.batch.title" class="pix">一批</h3>
+                  <span class="outro-kicker pix" aria-hidden="true">02</span>
+                </div>
+                <div class="outro-card-content">
+                  <div class="outro-sheet" aria-hidden="true"></div>
+                  <div class="outro-card-copy">
+                    <p data-i18n="outro.batch.desc">搜索之后点「下载这一批」：最多 256 张拼成一张精灵表，附一份 JSON 清单。</p>
+                    <button data-i18n="outro.batch.go" type="button" class="chip" data-outro-batch>搜一批试试 ↖</button>
+                  </div>
+                </div>
               </article>
-              <article class="outro-card">
-                <h3 class="pix">dsh 插件 / 技能</h3>
-                <p>在 Claude 里直接说：“给我 20 张紫色史莱姆，拼成精灵表”。</p>
-                <span class="tag pix">建设中</span>
+              <article class="outro-card is-all">
+                <div class="outro-card-head">
+                  <h3 data-i18n="outro.all.title" class="pix">全部</h3>
+                  <span class="outro-kicker pix" aria-hidden="true">03</span>
+                </div>
+                <p data-i18n="outro.all.desc">原数据集在 Hugging Face：Parquet 分片约 430 MB，或一个 259 MB 的 ZIP。</p>
+                <div class="outro-formats">
+                  <button data-i18n="outro.all.python" type="button" class="chip" data-outro-format="python" aria-pressed="true" aria-controls="outro-snippet">Python</button>
+                  <button data-i18n="outro.all.zipFormat" type="button" class="chip" data-outro-format="zip" aria-pressed="false" aria-controls="outro-snippet">ZIP</button>
+                </div>
+                <pre class="outro-code"><code id="outro-snippet">from datasets import load_dataset
+sprites = load_dataset("Angais/pixel-art-atlas-1.4m", split="train")</code></pre>
+                <div class="outro-actions">
+                  <button data-i18n="outro.copy" data-i18n-attr="aria-label:outro.copyLabel" type="button" class="chip" aria-label="复制 Python 代码">复制</button>
+                  <span class="outro-copied" role="status"></span>
+                  <a data-i18n="outro.all.zip" href="https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m/resolve/main/pixel-art-16x16-1.4m.zip" target="_blank" rel="noopener">下载 ZIP ↗</a>
+                  <a data-i18n="outro.all.page" href="https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m" target="_blank" rel="noopener">数据集页面 ↗</a>
+                </div>
               </article>
-              <article class="outro-card">
-                <h3 class="pix">许可</h3>
-                <p>素材来自 Angais/pixel-art-atlas-1.4m，以 CC0 发布，但只覆盖原作者能放弃的权利；它由 Krea 2 生成，商用仍受 Krea 社区许可约束。我们加的排列、色彩索引和中文翻译用 CC BY 4.0，网站代码用 MPL-2.0。AI 生成的形象可能近似现有作品，商用前请自查商标。本站非原数据集官方。</p>
+              <article class="outro-card is-next">
+                <div class="outro-card-head">
+                  <h3 data-i18n="outro.next.title" class="pix">在路上</h3>
+                  <span class="outro-kicker pix" aria-hidden="true">04</span>
+                </div>
+                <ul class="outro-roadmap">
+                  <li><span data-i18n="outro.next.dataset">我们的数据集：色彩排列、搜索索引、中文译名</span><span data-i18n="outro.soon" class="outro-soon pix">建设中</span></li>
+                  <li><span data-i18n="outro.next.cli">命令行工具</span><span data-i18n="outro.soon" class="outro-soon pix">建设中</span></li>
+                  <li><span data-i18n="outro.next.skill">dsh 技能</span><span data-i18n="outro.soon" class="outro-soon pix">建设中</span></li>
+                </ul>
+              </article>
+              <article class="outro-card is-licence outro-licence" aria-labelledby="outro-licence-title">
+                <div class="outro-card-head">
+                  <h3 data-i18n="outro.licence" class="pix" id="outro-licence-title">许可</h3>
+                  <span class="outro-kicker pix" aria-hidden="true">05</span>
+                </div>
+                <ul>
+                  <li data-i18n="outro.licence.sprites">素材：CC0。由 Krea 2 生成，商用还受 Krea 许可约束；个别形象可能接近已有角色或商标，商用前请自查。</li>
+                  <li data-i18n="outro.licence.ours">我们加的排列、索引和中文译名：CC BY 4.0。网站代码：MPL-2.0。</li>
+                  <li data-i18n="outro.licence.affiliation">本站与原数据集作者无关。</li>
+                </ul>
+                <a data-i18n="outro.licence.more" href="https://github.com/polang233/pixel-atlas#licences" target="_blank" rel="noopener">完整说明 ↗</a>
               </article>
             </div>
-            <nav class="outro-links pix" aria-label="仓库与反馈">
-              <a href="https://github.com/polang233/pixel-atlas" target="_blank" rel="noopener">GitHub 仓库 ↗</a>
-              <a href="https://github.com/polang233/pixel-atlas/issues" target="_blank" rel="noopener">反馈和问题 ↗</a>
-              <a href="https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m" target="_blank" rel="noopener">原数据集 ↗</a>
+            <nav data-i18n-attr="aria-label:outro.links" class="outro-links pix" aria-label="仓库与反馈">
+              <a data-i18n="outro.github" href="https://github.com/polang233/pixel-atlas" target="_blank" rel="noopener">GitHub 仓库 ↗</a>
+              <a data-i18n="outro.issues" href="https://github.com/polang233/pixel-atlas/issues" target="_blank" rel="noopener">反馈和问题 ↗</a>
+              <a data-i18n="outro.x" href="https://x.com/polang233" target="_blank" rel="noopener">X ↗</a>
             </nav>
-            <button type="button" class="outro-search pix">回到星图搜索 ↖</button>
+            <button data-i18n="outro.search" type="button" class="outro-search pix">回到星图搜索 ↖</button>
           </div>
         </section>
       </main>
 
-      <div class="boot pix" aria-live="polite"><img class="mark" src="/logo.svg" width="64" height="64" alt="" /><p>PIXEL·ATLAS</p><i></i><span>正在把 140 万张素材排成一颗星球…</span></div>
+      <div class="boot pix" aria-live="polite"><img class="mark" src="/logo.svg" width="64" height="64" alt=""><p data-i18n="brand.name">PIXEL·ATLAS</p><i></i><span data-i18n="boot.loading">正在把 140 万张素材排成一颗星球…</span></div>
       <canvas id="fx" aria-hidden="true"></canvas>
       <div class="slash" aria-hidden="true"><i></i></div>
 

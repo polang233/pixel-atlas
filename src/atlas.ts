@@ -2,7 +2,7 @@
  * Access to the streaming atlas built by pipeline/build_atlas.py.
  * A "cell" (y * side + x) is the id of a sprite on the colour-wheel disc.
  */
-import { translateQuery, type ColorWord } from './zh'
+import { type ColorWord, translateQuery } from './search-zh'
 
 export interface LevelMeta {
   cells: number
@@ -131,19 +131,19 @@ interface Index {
 }
 let indexP: Promise<Index> | null = null
 export function loadIndex(): Promise<Index> {
-  return (indexP ??= Promise.all([
-    loadSubjects(),
-    atlasFetch('cells.bin').then((r) => r.arrayBuffer()),
-  ]).then(([subjects, buf]) => {
+  indexP ??= Promise.all([loadSubjects(), atlasFetch('cells.bin').then((r) => r.arrayBuffer())]).then(([subjects, buf]) => {
     downloaded += buf.byteLength
     const offsets = new Uint32Array(subjects.length + 1)
-    subjects.forEach(([, n], i) => (offsets[i + 1] = offsets[i] + n))
+    subjects.forEach(([, n], i) => {
+      offsets[i + 1] = offsets[i] + n
+    })
     return { subjects, offsets, cells: new Uint32Array(buf), words: subjects.map(([s]) => s.split(/[\s-]+/)) }
-  }))
+  })
+  return indexP
 }
 
 export type SearchResult =
-  | { kind: 'color'; rgb: [number, number, number]; label: string }
+  | { kind: 'color'; rgb: [number, number, number]; label: string; color?: ColorWord }
   | {
       kind: 'subject'
       /** matched subjects, best first */
@@ -200,7 +200,7 @@ export async function search(raw: string, ov: Overview): Promise<SearchResult | 
   const { english, color } = translateQuery(q)
   const words = english.split(/\s+/).filter(Boolean)
   if (!words.length) {
-    if (color) return { kind: 'color', rgb: color.rgb, label: color.label }
+    if (color) return { kind: 'color', rgb: color.rgb, label: color.label, color }
     return { kind: 'none', english }
   }
   const idx = await loadIndex()
@@ -209,9 +209,7 @@ export async function search(raw: string, ov: Overview): Promise<SearchResult | 
   const plural = (w: string) => [w, `${w}s`, `${w}es`, w.replace(/s$/, '')]
   for (let pass = 0; pass < 2 && !scored.length; pass++) {
     idx.words.forEach((sw, i) => {
-      const ok = words.every((w) =>
-        sw.some((x) => (pass === 0 ? plural(w).includes(x) : x.startsWith(w) || (w.length > 3 && x.includes(w)))),
-      )
+      const ok = words.every((w) => sw.some((x) => (pass === 0 ? plural(w).includes(x) : x.startsWith(w) || (w.length > 3 && x.includes(w)))))
       if (!ok) return
       const name = idx.subjects[i][0]
       let score = name === phrase ? 1000 : sw[sw.length - 1] === words[words.length - 1] ? 200 : 50

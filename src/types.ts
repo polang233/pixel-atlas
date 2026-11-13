@@ -5,7 +5,7 @@ export type AmbienceName = 'space' | 'crt' | 'cart' | 'dungeon' | 'ocean' | 'neo
 export interface Chapter {
   id: string
   num: string
-  title: string
+  title(): string
   /** colour the transition paints with while this chapter comes in */
   color: string
   /** transition used when this chapter is entered */

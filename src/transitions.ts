@@ -9,8 +9,8 @@ const slashBar = slash.querySelector<HTMLElement>('i')!
 const stage = document.querySelector<HTMLElement>('#stage')!
 
 const BAYER8 = [
-  0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
-  3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
+  0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28, 52, 20, 62, 30, 54, 22, 3, 35, 11, 43, 1, 33, 9, 41, 51,
+  19, 59, 27, 49, 17, 57, 25, 15, 47, 7, 39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
 ].map((v) => v / 64)
 
 function tween(duration: number, onUpdate: (t: number) => void, ease = 'none'): Promise<void> {
@@ -97,8 +97,7 @@ async function iris(color: string, swap: () => void) {
   const draw = (r: number) => {
     clear()
     fxCtx.fillStyle = color
-    for (let y = 0; y < rows; y++)
-      for (let x = 0; x < cols; x++) if (Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.0) > r) fxCtx.fillRect(x, y, 1, 1)
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.0) > r) fxCtx.fillRect(x, y, 1, 1)
   }
   await tween(0.4, (t) => draw(maxR * (1 - t)), 'steps(12)')
   await new Promise((r) => setTimeout(r, 60))
@@ -154,7 +153,13 @@ async function glitch(color: string, swap: () => void) {
       fxCtx.globalAlpha = 1
     }
   }
-  const jitter = gsap.to(stage, { x: () => (Math.random() - 0.5) * 24, filter: () => `hue-rotate(${Math.random() * 180}deg)`, duration: 0.05, repeat: 6, ease: 'steps(1)' })
+  const jitter = gsap.to(stage, {
+    x: () => (Math.random() - 0.5) * 24,
+    filter: () => `hue-rotate(${Math.random() * 180}deg)`,
+    duration: 0.05,
+    repeat: 6,
+    ease: 'steps(1)',
+  })
   await tween(0.32, (t) => bars(t), 'steps(8)')
   jitter.kill()
   gsap.set(stage, { clearProps: 'transform,filter' })

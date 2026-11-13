@@ -1,4 +1,4 @@
-import './style.css'
+import './styles/index.css'
 import gsap from 'gsap'
 import { sound } from './audio'
 import { createCart } from './chapters/cart'
@@ -9,10 +9,15 @@ import { createNeon } from './chapters/neon'
 import { createOcean } from './chapters/ocean'
 import { createOutro } from './chapters/outro'
 import { createWorkshop } from './chapters/workshop'
+import { initLocale, type MessageKey, onLocaleChange, t } from './i18n'
+import { initLanguageSwitch } from './i18n/switch'
 import { loadStrip, type Sprite } from './sprites'
 import { runTransition } from './transitions'
 import type { Chapter } from './types'
 import { reducedMotion } from './types'
+
+initLocale()
+initLanguageSwitch()
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!
 const section = (id: string) => $<HTMLElement>(`.chapter[data-id="${id}"]`)
@@ -23,9 +28,7 @@ if (new URLSearchParams(location.search).has('bare')) document.documentElement.c
 
 async function boot() {
   const names = ['depth', 'crt', 'workshop', 'dungeon', 'ocean', 'neon', 'cthulhu'] as const
-  const strips = Object.fromEntries(
-    await Promise.all(names.map(async (n) => [n, await loadStrip(n)] as const)),
-  ) as Record<(typeof names)[number], Sprite[]>
+  const strips = Object.fromEntries(await Promise.all(names.map(async (n) => [n, await loadStrip(n)] as const))) as Record<(typeof names)[number], Sprite[]>
 
   let goTo: (i: number) => Promise<void> = async () => {}
   const workshop = createWorkshop(section('workshop'), strips.workshop)
@@ -37,13 +40,17 @@ async function boot() {
   })
   const worlds: Chapter[] = [
     createCart(section('cart'), strips.crt),
-    createDungeon(section('dungeon'), strips.dungeon, strips.crt.find((q) => q.subject === 'knight')),
+    createDungeon(
+      section('dungeon'),
+      strips.dungeon,
+      strips.crt.find((q) => q.subject === 'knight'),
+    ),
     createOcean(section('ocean'), strips.ocean),
     createNeon(section('neon'), strips.neon),
     createCthulhu(section('cthulhu'), strips.cthulhu),
   ]
   const outro = createOutro(section('outro'), Object.values(strips).flat(), () => {
-    goTo(0).then(() => hero.focusSearch?.())
+    return goTo(0).then(() => hero.focusSearch?.())
   })
   const chapters: Chapter[] = [hero, ...worlds, workshop, outro]
   const areaOf = (c: Chapter): Area => (worlds.includes(c) ? 'worlds' : (c.id as Area))
@@ -55,7 +62,7 @@ async function boot() {
   const sndBtn = $<HTMLButtonElement>('.snd-btn')
 
   const AREAS: Area[] = ['hero', 'worlds', 'workshop', 'outro']
-  const AREA_NAME: Record<Area, string> = { hero: '星图', worlds: '世界', workshop: '共创工坊', outro: '获取' }
+  const AREA_NAME: Record<Area, MessageKey> = { hero: 'nav.atlas', worlds: 'nav.worlds', workshop: 'nav.workshop', outro: 'nav.get' }
   const nextbar = $<HTMLButtonElement>('.nextbar')
   const nextLabel = nextbar.querySelector<HTMLElement>('.nb-label')!
   const nextName = nextbar.querySelector<HTMLElement>('b')!
@@ -74,8 +81,10 @@ async function boot() {
 
   // ---- sound toggle ----------------------------------------------------------------
   function updateSound() {
-    const label = !sound.unlocked ? '点我开声音' : sound.muted ? '声音 关' : '声音 开'
+    const label = !sound.unlocked ? t('sound.unlock') : sound.muted ? t('sound.off') : t('sound.on')
     sndBtn.querySelector('span')!.textContent = label
+    sndBtn.setAttribute('aria-label', label)
+    sndBtn.title = label
     sndBtn.classList.toggle('is-locked', !sound.unlocked && !sound.muted)
     sndBtn.classList.toggle('is-off', sound.muted)
     sndBtn.setAttribute('aria-pressed', String(!sound.muted && sound.unlocked))
@@ -106,37 +115,56 @@ async function boot() {
   const worldButtons = worlds.map((c, k) => {
     const b = document.createElement('button')
     b.type = 'button'
-    b.innerHTML = `<b>${c.num}</b>${c.title}`
+    const num = document.createElement('b')
+    num.textContent = c.num
+    const name = document.createElement('span')
+    const update = () => {
+      name.textContent = c.title()
+    }
+    update()
+    onLocaleChange(update)
+    b.append(num, name)
     b.addEventListener('click', () => goTo(k + 1))
     b.addEventListener('pointerenter', () => sound.tick(1700 + k * 120, 0.012))
     worldList.append(b)
     return b
   })
-  worldbar.querySelectorAll<HTMLButtonElement>('[data-step]').forEach((b) =>
+  worldbar.querySelectorAll<HTMLButtonElement>('[data-step]').forEach((b) => {
     b.addEventListener('click', () => {
       const k = index - 1 + Number(b.dataset.step)
       goTo(1 + ((k + worlds.length) % worlds.length))
-    }),
-  )
+    })
+  })
 
-  const HINTS: Record<Area, string> = {
-    hero: '<kbd>滚轮</kbd> 缩放 <kbd>/</kbd> 搜索',
-    worlds: '<kbd>滚轮</kbd><kbd>↑↓</kbd> 换世界 · 每个世界都能玩一局',
-    workshop: '选一个工具，在画布上拖动 · 把自己的图片拖进来也行',
-    outro: '<kbd>/</kbd> 回到星图搜索',
-  }
+  const HINTS = {
+    hero: 'hud.hint.heroHtml',
+    worlds: 'hud.hint.worldsHtml',
+    workshop: 'hud.hint.workshop',
+    outro: 'hud.hint.outroHtml',
+  } as const
 
   function updateHud() {
     const c = chapters[index]
     const area = areaOf(c)
-    navButtons.forEach((b) => b.setAttribute('aria-current', String(b.dataset.go === area)))
-    worldButtons.forEach((b, k) => b.setAttribute('aria-current', String(worlds[k] === c)))
+    navButtons.forEach((b) => {
+      b.setAttribute('aria-current', String(b.dataset.go === area))
+    })
+    worldButtons.forEach((b, k) => {
+      b.setAttribute('aria-current', String(worlds[k] === c))
+    })
     worldbar.hidden = area !== 'worlds'
-    hudHint.innerHTML = HINTS[area]
+    if (area === 'workshop') hudHint.textContent = t(HINTS[area])
+    else hudHint.innerHTML = t(HINTS[area])
     document.body.dataset.chapter = c.id
     document.body.dataset.area = area
     if (location.hash.slice(1) !== c.id) history.replaceState(null, '', `#${c.id}`)
   }
+
+  onLocaleChange(() => {
+    updateSound()
+    updateHud()
+    if (!nextbar.hidden) showNext(Number(nextbar.dataset.dir) === -1 ? -1 : 1, Math.abs(edgeAcc) / EDGE, performance.now() < armedUntil)
+  })
 
   // ---- "there is more this way": the hand-off between the big sections --------------------
   /** the section before / after the one on screen, and the chapter you would land on */
@@ -160,11 +188,15 @@ async function boot() {
     nextbar.dataset.dir = String(dir)
     nextbar.classList.toggle('is-charging', progress > 0 || armed)
     nextLabel.textContent = armed
-      ? `再按一次 ${dir === 1 ? '↓' : '↑'} 前往`
+      ? t('nav.pressAgain', { key: dir === 1 ? '↓' : '↑' })
       : dir === 1
-        ? progress > 0 ? '继续滚动，前往' : chapters[index].atEnd ? `「${AREA_NAME[areaOf(chapters[index])]}」看完了 · 继续滚动前往` : '下一站 · 继续滚动前往'
-        : '继续向上，回到'
-    nextName.textContent = AREA_NAME[n.area]
+        ? progress > 0
+          ? t('nav.scrollOn')
+          : chapters[index].atEnd
+            ? t('nav.finished', { area: t(AREA_NAME[areaOf(chapters[index])]) })
+            : t('nav.nextStop')
+        : t('nav.scrollBack')
+    nextName.textContent = t(AREA_NAME[n.area])
     nextFill.style.transform = `scaleX(${armed ? 1 : Math.min(1, progress)})`
   }
   /** resting state: a quiet pointer onward whenever the current section has nothing left to scroll */
@@ -224,7 +256,11 @@ async function boot() {
     if (reducedMotion) return
     const items = el.querySelectorAll('.world-copy > *, .ws-head > *, .ws-tools > *, .outro-box > *, .outro-cards > *')
     if (!items.length) return
-    gsap.fromTo(items, { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.3, ease: 'steps(4)', stagger: 0.045, delay: 0.12, overwrite: true, clearProps: 'opacity,transform' })
+    gsap.fromTo(
+      items,
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.3, ease: 'steps(4)', stagger: 0.045, delay: 0.12, overwrite: true, clearProps: 'opacity,transform' },
+    )
   }
 
   function activate(i: number, dir: 1 | -1) {
@@ -375,10 +411,15 @@ async function boot() {
     if (i >= 0) goTo(i)
   })
 
-  const start = Math.max(0, chapters.findIndex((c) => c.id === location.hash.slice(1)))
+  const start = Math.max(
+    0,
+    chapters.findIndex((c) => c.id === location.hash.slice(1)),
+  )
   index = start
   if (areaOf(chapters[start]) === 'worlds') lastWorld = start
-  chapters.forEach((c, i) => i !== start && c.leave?.())
+  chapters.forEach((c, i) => {
+    i !== start && c.leave?.()
+  })
   chapters[start].el.classList.add('is-active')
   chapters[start].enter?.(1)
   sound.ambience(chapters[start].ambience ?? null)
@@ -389,5 +430,12 @@ async function boot() {
 
 boot().catch((err) => {
   console.error(err)
-  document.body.insertAdjacentHTML('beforeend', `<p style="position:fixed;bottom:16px;left:16px;color:#f66;z-index:99">加载失败：${err.message}</p>`)
+  const error = document.createElement('p')
+  error.style.cssText = 'position:fixed;bottom:16px;left:16px;color:#f66;z-index:99'
+  const update = () => {
+    error.textContent = t('boot.failed', { error: err.message })
+  }
+  update()
+  onLocaleChange(update)
+  document.body.append(error)
 })

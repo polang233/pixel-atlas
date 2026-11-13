@@ -22,10 +22,7 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
 
 /** Load a 16-column strip produced by pipeline/build_proto.py. */
 export async function loadStrip(name: string): Promise<Sprite[]> {
-  const [img, meta] = await Promise.all([
-    loadImage(`/data/ch_${name}.png`),
-    fetch(`/data/ch_${name}.json`).then((r) => r.json() as Promise<SpriteMeta[]>),
-  ])
+  const [img, meta] = await Promise.all([loadImage(`/data/ch_${name}.png`), fetch(`/data/ch_${name}.json`).then((r) => r.json() as Promise<SpriteMeta[]>)])
   const c = document.createElement('canvas')
   c.width = img.width
   c.height = img.height
