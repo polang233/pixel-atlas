@@ -1,13 +1,15 @@
 /**
- * World 01 · 弹力. A box of sprites with real weight: grab one, throw it, watch
+ * World 01 · Bounce. A box of sprites with real weight: grab one, throw it, watch
  * it squash on landing and stretch in flight. The four ingredients of pixel
  * "bounce" (squash and stretch, afterimages, dust, low frame rate) can each be
  * switched off to feel what they add.
- * Game: 越滚越大 — drop sprites into a jar; two of a kind merge into the next
+ * Game: Size Up — drop sprites into a jar; two of a kind merge into the next
  * one up, from a coin all the way to a castle.
  */
+
 import { sound } from '../audio'
 import { GameShell } from '../game'
+import { onLocaleChange, t } from '../i18n'
 import { drawText, textWidth } from '../pixelfont'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
@@ -30,12 +32,38 @@ interface Body {
   rest: number
   dead?: boolean
 }
-interface Puff { x: number; y: number; vx: number; vy: number; life: number; c: string; s: number }
-interface Pop { x: number; y: number; text: string; t: number }
+interface Puff {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  life: number
+  c: string
+  s: number
+}
+interface Pop {
+  x: number
+  y: number
+  text: string
+  t: number
+}
 
 // the merge ladder, smallest to largest
 const LADDER = ['coin', 'toadstool', 'slime', 'cave bat', 'ghost', 'goblin', 'skeleton', 'wizard', 'knight', 'king slime', 'dragon', 'castle']
-const LADDER_ZH = ['金币', '毒蘑菇', '史莱姆', '蝙蝠', '幽灵', '哥布林', '骷髅', '巫师', '骑士', '史莱姆王', '巨龙', '城堡']
+const LADDER_NAMES = [
+  'cart.ladder.0',
+  'cart.ladder.1',
+  'cart.ladder.2',
+  'cart.ladder.3',
+  'cart.ladder.4',
+  'cart.ladder.5',
+  'cart.ladder.6',
+  'cart.ladder.7',
+  'cart.ladder.8',
+  'cart.ladder.9',
+  'cart.ladder.10',
+  'cart.ladder.11',
+] as const
 const RADII = [7, 9, 11, 13, 15, 18, 21, 24, 27, 31, 35, 40]
 
 export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
@@ -51,19 +79,29 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
   const all = sprites.map(toCanvas)
   const tierImg = LADDER.map((name) => {
     const i = sprites.findIndex((s) => s.subject === name)
-    return all[i >= 0 ? i : 0]
+    return all[Math.max(i, 0)]
   })
-  ladderEl.innerHTML = LADDER.map((_, i) => `<img src="${sprites.find((s) => s.subject === LADDER[i])?.url ?? ''}" alt="${LADDER_ZH[i]}" title="${LADDER_ZH[i]}">`).join('<i>›</i>')
+  LADDER.forEach((subject, i) => {
+    if (i) {
+      const separator = document.createElement('i')
+      separator.textContent = '›'
+      ladderEl.append(separator)
+    }
+    const img = document.createElement('img')
+    img.src = sprites.find((sprite) => sprite.subject === subject)?.url ?? ''
+    img.alt = img.title = t(LADDER_NAMES[i])
+    ladderEl.append(img)
+  })
 
   const fx = { squash: true, trail: true, dust: true, lowfps: false }
-  el.querySelectorAll<HTMLButtonElement>('[data-bn]').forEach((b) =>
+  el.querySelectorAll<HTMLButtonElement>('[data-bn]').forEach((b) => {
     b.addEventListener('click', () => {
       const k = b.dataset.bn as keyof typeof fx
       fx[k] = !fx[k]
       b.setAttribute('aria-pressed', String(fx[k]))
       sound.click()
-    }),
-  )
+    })
+  })
 
   let PX = 3
   let W = 0
@@ -87,20 +125,54 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     H = Math.ceil(canvas.clientHeight / PX)
     canvas.width = W
     canvas.height = H
-    const jw = Math.min(190, W - 24)
+    const canvasRect = canvas.getBoundingClientRect()
+    const hudRect = el.querySelector<HTMLElement>('.game-hud:not([hidden])')?.getBoundingClientRect()
+    // Phones put the HUD above the jar, everything else below it: go by where it actually is.
+    const topHud = !!hudRect && hudRect.top + hudRect.height / 2 < canvasRect.top + canvasRect.height / 2
+    const safeTop = Math.max(Math.ceil(64 / PX), hudRect && topHud ? Math.ceil((hudRect.bottom - canvasRect.top + 8) / PX) : 0)
+    const maxR = RADII[4] // the largest tier in rollTier's drop pool
+    const minTop = safeTop + 2 * maxR + 10
+    const landscape = W > H
+    const jw = landscape ? Math.min(300, W - 40) : Math.min(W - 16, 220)
     jar.l = Math.round(W / 2 - jw / 2)
     jar.r = jar.l + jw
-    jar.bottom = H - 40
-    jar.top = Math.max(34, jar.bottom - Math.min(H - 60, 250))
-    jar.line = jar.top + 26
+    // Rest on the showcase floor, moving up only when the measured HUD needs it.
+    jar.bottom = Math.min(H - 36, hudRect && !topHud ? Math.floor((hudRect.top - canvasRect.top) / PX - 8) : H)
+    const available = Math.max(0, jar.bottom - minTop)
+    const height = Math.min(available, Math.round(jw * (landscape ? 0.62 : 1.15)))
+    jar.top = jar.bottom - height
+    jar.line = jar.top + Math.max(18, Math.min(26, Math.round(height * 0.2)))
   }
 
-  const make = (x: number, y: number, tier: number, img = tierImg[tier], r = RADII[tier]): Body => ({ x, y, vx: 0, vy: 0, r, img, tier, sq: 0, sv: 0, held: false, age: 0, trail: [], rest: 0 })
+  const make = (x: number, y: number, tier: number, img = tierImg[tier], r = RADII[tier]): Body => ({
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    r,
+    img,
+    tier,
+    sq: 0,
+    sv: 0,
+    held: false,
+    age: 0,
+    trail: [],
+    rest: 0,
+  })
 
   function dust(x: number, y: number, power: number, c = '#d9cfb8') {
     if (!fx.dust || reducedMotion) return
     const n = Math.min(10, 2 + Math.floor(power / 60))
-    for (let i = 0; i < n; i++) puffs.push({ x, y, vx: (Math.random() - 0.5) * (60 + power * 0.25), vy: -Math.random() * (20 + power * 0.1), life: 0.3 + Math.random() * 0.3, c, s: Math.random() < 0.4 ? 2 : 1 })
+    for (let i = 0; i < n; i++)
+      puffs.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * (60 + power * 0.25),
+        vy: -Math.random() * (20 + power * 0.1),
+        life: 0.3 + Math.random() * 0.3,
+        c,
+        s: Math.random() < 0.4 ? 2 : 1,
+      })
   }
 
   /** an impact along the given axis: the body flattens against whatever it hit */
@@ -118,19 +190,25 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     const n = Math.max(7, Math.min(16, Math.floor(W / 30)))
     for (let i = 0; i < n; i++) {
       const big = i % 5 === 0
-      const b = make(20 + Math.random() * (W - 40), 20 + Math.random() * (H * 0.5), -1, pool[(Math.random() * pool.length) | 0], big ? 24 : i % 3 === 0 ? 16 : 12)
+      const b = make(
+        20 + Math.random() * (W - 40),
+        20 + Math.random() * (H * 0.5),
+        -1,
+        pool[(Math.random() * pool.length) | 0],
+        big ? 24 : i % 3 === 0 ? 16 : 12,
+      )
       b.vx = (Math.random() - 0.5) * 120
       bodies.push(b)
     }
   }
 
-  // ---- game: 越滚越大 ------------------------------------------------------------------------
+  // ---- game: Size Up --------------------------------------------------------------------------
   const g = { on: false, over: false, score: 0, best: 0, next: 0, hold: 0, aim: 0, cool: 0, danger: 0, keys: new Set<string>() }
   const rollTier = () => {
     const r = Math.random()
     return r < 0.34 ? 0 : r < 0.62 ? 1 : r < 0.82 ? 2 : r < 0.94 ? 3 : 4
   }
-  const hud = () => `最大：${LADDER_ZH[g.best]} · 下一个：${LADDER_ZH[g.next]}`
+  const hud = () => t('cart.hud', { best: t(LADDER_NAMES[g.best]), next: t(LADDER_NAMES[g.next]) })
 
   function drop() {
     if (!g.on || g.over || g.cool > 0) return
@@ -142,7 +220,7 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     g.next = rollTier()
     g.cool = 0.5
     sound.jump()
-    shell.extra(hud())
+    shell.extra(hud)
   }
 
   function merge(a: Body, b: Body) {
@@ -154,8 +232,21 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     g.score += pts
     g.best = Math.max(g.best, t)
     pops.push({ x, y: y - 6, text: `+${pts}`, t: 0 })
-    for (let i = 0; i < 12; i++) puffs.push({ x, y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.7) * 140, life: 0.4 + Math.random() * 0.3, c: i % 2 ? '#ffd84d' : '#fff', s: 2 })
-    sound.arp([392, 494, 587, 784].map((f) => f * 2 ** (Math.min(t, 10) / 12)), 0.04, { wave: sound.pulse(0.25), vol: 0.04, len: 0.1 })
+    for (let i = 0; i < 12; i++)
+      puffs.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 160,
+        vy: (Math.random() - 0.7) * 140,
+        life: 0.4 + Math.random() * 0.3,
+        c: i % 2 ? '#ffd84d' : '#fff',
+        s: 2,
+      })
+    sound.arp(
+      [392, 494, 587, 784].map((f) => f * 2 ** (Math.min(t, 10) / 12)),
+      0.04,
+      { wave: sound.pulse(0.25), vol: 0.04, len: 0.1 },
+    )
     shake = Math.min(0.3, 0.08 + t * 0.02)
     if (t >= LADDER.length) {
       // two castles: the top of the ladder, cleared for a bonus
@@ -169,7 +260,7 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
       bodies.push(nb)
     }
     shell.score(g.score)
-    shell.extra(hud())
+    shell.extra(hud)
   }
 
   // ---- physics ----------------------------------------------------------------------------
@@ -304,7 +395,12 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
       if (g.danger > 1.6) {
         g.over = true
         sound.hurt()
-        shell.end(g.score, '罐子满了', `最大合成到 ${LADDER_ZH[g.best]} · 天梯一共 ${LADDER.length} 级`, g.best >= 8)
+        shell.end(
+          g.score,
+          () => t('cart.full'),
+          () => t('cart.result', { best: t(LADDER_NAMES[g.best]), n: LADDER.length }),
+          g.best >= 8,
+        )
       }
     } else {
       step(dt)
@@ -384,14 +480,17 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
         ctx.fillStyle = 'rgba(255,255,255,0.22)'
         for (let y = jar.top + 4; y < jar.bottom; y += 6) ctx.fillRect(Math.round(g.aim), y, 1, 2)
         ctx.globalAlpha = g.cool > 0 ? 0.4 : 1
-        ctx.drawImage(tierImg[g.hold], Math.round(g.aim - r), Math.round(jar.top - 12 - r), r * 2, r * 2)
+        ctx.drawImage(tierImg[g.hold], Math.round(g.aim - r), Math.round(jar.top - 10 - r), r * 2, r * 2)
         ctx.globalAlpha = 1
       }
     }
 
     const hold = fx.lowfps && !reducedMotion
     for (const b of bodies) {
-      if (fx.trail && !reducedMotion) b.trail.forEach((t, i) => drawBody(b, 0.08 + i * 0.05, t))
+      if (fx.trail && !reducedMotion)
+        b.trail.forEach((t, i) => {
+          drawBody(b, 0.08 + i * 0.05, t)
+        })
       // contact shadow
       const d = floor - (b.y + b.r)
       if (d < 60) {
@@ -417,7 +516,10 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
   }
 
   function frame(now: number) {
-    if (canvas.width !== Math.ceil(canvas.clientWidth / Math.max(2, Math.round(canvas.clientWidth / 430))) || canvas.height !== Math.ceil(canvas.clientHeight / PX)) {
+    if (
+      canvas.width !== Math.ceil(canvas.clientWidth / Math.max(2, Math.round(canvas.clientWidth / 430))) ||
+      canvas.height !== Math.ceil(canvas.clientHeight / PX)
+    ) {
       resize()
       if (!g.on) fillShowcase()
     }
@@ -470,7 +572,7 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
   canvas.addEventListener('pointerup', release)
   canvas.addEventListener('pointercancel', release)
 
-  const shell = new GameShell(el, 'cart-merge', '越滚越大', {
+  const shell = new GameShell(el, 'cart-merge', () => t('game.cart'), {
     start() {
       release()
       resize()
@@ -479,7 +581,8 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
       pops = []
       Object.assign(g, { on: true, over: false, score: 0, best: 0, hold: rollTier(), next: rollTier(), aim: W / 2, cool: 0.3, danger: 0 })
       g.keys.clear()
-      shell.extra(hud())
+      shell.extra(hud)
+      resize()
     },
     stop() {
       g.on = false
@@ -487,6 +590,15 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
       resize()
       fillShowcase()
     },
+  })
+  const gameHud = el.querySelector<HTMLElement>('.game-hud')!
+  const layoutObserver = new ResizeObserver(() => {
+    if (g.on) resize()
+  })
+  layoutObserver.observe(canvas)
+  layoutObserver.observe(gameHud)
+  gameHud.addEventListener('animationend', () => {
+    if (g.on) resize()
   })
   const KEYMAP: Record<string, string> = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r' }
   window.addEventListener('keydown', (e) => {
@@ -506,10 +618,16 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     if (k) g.keys.delete(k)
   })
 
+  onLocaleChange(() => {
+    ladderEl.querySelectorAll('img').forEach((img, i) => {
+      img.alt = img.title = t(LADDER_NAMES[i])
+    })
+  })
+
   return {
     id: 'cart',
     num: '01',
-    title: '弹力',
+    title: () => t('world.cart'),
     color: '#ffb347',
     transition: 'crt',
     ambience: 'cart',

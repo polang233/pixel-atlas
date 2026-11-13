@@ -1,10 +1,11 @@
 /**
- * 03 · 像素工坊. One sprite, six small pixel tools — every one of them runs
+ * 03 · Workshop. One sprite, six small pixel tools — every one of them runs
  * live on the 16×16 data, so playing with them *is* the explanation.
  */
 import gsap from 'gsap'
 import { sound } from '../audio'
-import { hueToward, lchToRgb, rgbToLch, type RGB } from '../color'
+import { hueToward, lchToRgb, type RGB, rgbToLch } from '../color'
+import { onLocaleChange, t } from '../i18n'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
@@ -18,66 +19,173 @@ type ToolId = 'depth' | 'light' | 'outline' | 'swap' | 'scale' | 'rotate' | 'jui
 const TOOLS: { id: ToolId; name: string; desc: string }[] = [
   {
     id: 'depth',
-    name: '色深',
-    desc: '同一张图，颜色越少越“老”。今天的像素画平均每张二十来种颜色；压到一套共用的 32 色，整批素材立刻像出自同一个游戏；16 色没有中间调，阴影只能换一种颜色来画；4 色只剩明暗；1 位只剩轮廓。打开有序抖动，用棋盘格的疏密骗出不存在的中间色。',
+    get name() {
+      return t('workshop.depth.name')
+    },
+    get desc() {
+      return t('workshop.depth.desc')
+    },
   },
   {
     id: 'light',
-    name: '高光',
-    desc: '鼠标放到画布上，你就是光源。程序从轮廓猜出凹凸（离边缘越远越“鼓”），算出每个像素朝向光的程度，再把结果量化回几级色阶：阴影偏冷、高光偏暖，这叫色相偏移。关掉量化看看——平滑的明暗一下子就不像像素画了。',
+    get name() {
+      return t('workshop.light.name')
+    },
+    get desc() {
+      return t('workshop.light.desc')
+    },
   },
   {
     id: 'outline',
-    name: '描边',
-    desc: '同一张图，换一种描边就换了一种年代感。纯黑外描边最复古；选择性描边用旁边颜色的暗调代替黑色，是现代像素画的主流；外发光常用来标记能捡的道具。',
+    get name() {
+      return t('workshop.outline.name')
+    },
+    get desc() {
+      return t('workshop.outline.desc')
+    },
   },
   {
     id: 'swap',
-    name: '换色',
-    desc: '游戏里的“换色怪”：同一张图只改色相，就是一只新敌人。左右拖动画布可以连续换色；下面六套是预设。明度没变，所以轮廓和体积都还在。',
+    get name() {
+      return t('workshop.swap.name')
+    },
+    get desc() {
+      return t('workshop.swap.desc')
+    },
   },
   {
     id: 'scale',
-    name: '放大',
-    desc: '像素画放大只能用最近邻，或者专门的像素算法。双线性会把硬边糊成一片；Scale2x（又叫 EPX）会在斜线上补出新像素，45° 边变平滑，而且一种新颜色都不加。',
+    get name() {
+      return t('workshop.scale.name')
+    },
+    get desc() {
+      return t('workshop.scale.desc')
+    },
   },
   {
     id: 'rotate',
-    name: '旋转',
-    desc: '直接旋转像素图会断线、丢像素。RotSprite 的做法是先用 Scale2x 放大 8 倍，在大图上旋转，再缩回原尺寸——线条连贯得多。左右拖动画布改变角度。',
+    get name() {
+      return t('workshop.rotate.name')
+    },
+    get desc() {
+      return t('workshop.rotate.desc')
+    },
   },
   {
     id: 'juice',
-    name: '打击感',
-    desc: '点画布打它。顿帧、闪白、震屏、击退、粒子、飘字、音效，每一项都只占几帧。关掉任意一项再打几下，感受少了什么。',
+    get name() {
+      return t('workshop.juice.name')
+    },
+    get desc() {
+      return t('workshop.juice.desc')
+    },
   },
 ]
 
 const hex3 = (h: string): RGB => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
 const DEPTHS: { key: string; note: string; palette: RGB[] | null; ramp?: boolean }[] = [
-  { key: '原色', note: '今天 · 不限色', palette: null },
   {
-    key: '32 色',
-    note: '16 位时代的电脑 · 整个游戏共用一套调色板',
-    palette: '000000 222034 45283c 663931 8f563b df7126 d9a066 eec39a fbf236 99e550 6abe30 37946e 4b692f 524b24 323c39 3f3f74 306082 5b6ee1 639bff 5fcde4 cbdbfc ffffff 9badb7 847e87 696a6a 595652 76428a ac3232 d95763 d77bba 8f974a 8a6f30'.split(' ').map(hex3),
+    get key() {
+      return t('workshop.depth.original')
+    },
+    get note() {
+      return t('workshop.depth.today')
+    },
+    palette: null,
   },
   {
-    key: '16 色',
-    note: '8 位主机 / 幻想主机 · 高饱和，没有中间调',
+    get key() {
+      return t('workshop.depth.32')
+    },
+    get note() {
+      return t('workshop.depth.32note')
+    },
+    palette:
+      '000000 222034 45283c 663931 8f563b df7126 d9a066 eec39a fbf236 99e550 6abe30 37946e 4b692f 524b24 323c39 3f3f74 306082 5b6ee1 639bff 5fcde4 cbdbfc ffffff 9badb7 847e87 696a6a 595652 76428a ac3232 d95763 d77bba 8f974a 8a6f30'
+        .split(' ')
+        .map(hex3),
+  },
+  {
+    get key() {
+      return t('workshop.depth.16')
+    },
+    get note() {
+      return t('workshop.depth.16note')
+    },
     palette: '000000 1d2b53 7e2553 008751 ab5236 5f574f c2c3c7 fff1e8 ff004d ffa300 ffec27 00e436 29adff 83769c ff77a8 ffccaa'.split(' ').map(hex3),
   },
-  { key: '4 色', note: '掌机 · 只按明暗分四档', palette: '0f380f 306230 8bac0f c4d82c'.split(' ').map(hex3), ramp: true },
-  { key: '1 位', note: '早期个人电脑 · 只有黑白', palette: [[0, 0, 0], [255, 255, 255]], ramp: true },
+  {
+    get key() {
+      return t('workshop.depth.4')
+    },
+    get note() {
+      return t('workshop.depth.4note')
+    },
+    palette: '0f380f 306230 8bac0f c4d82c'.split(' ').map(hex3),
+    ramp: true,
+  },
+  {
+    get key() {
+      return t('workshop.depth.1')
+    },
+    get note() {
+      return t('workshop.depth.1note')
+    },
+    palette: [
+      [0, 0, 0],
+      [255, 255, 255],
+    ],
+    ramp: true,
+  },
 ]
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5)
 
 const VARIANTS = [
-  { name: '原版' },
-  { name: '冰霜', h: 228, c: 0.9, l: 0.04 },
-  { name: '剧毒', h: 138, c: 1.05, l: 0 },
-  { name: '烈焰', h: 36, c: 1.2, l: 0.02 },
-  { name: '暗影', h: 296, c: 0.55, l: -0.12 },
-  { name: '黄金', h: 86, c: 1.1, l: 0.05 },
+  {
+    get name() {
+      return t('workshop.swap.original')
+    },
+  },
+  {
+    get name() {
+      return t('workshop.swap.ice')
+    },
+    h: 228,
+    c: 0.9,
+    l: 0.04,
+  },
+  {
+    get name() {
+      return t('workshop.swap.poison')
+    },
+    h: 138,
+    c: 1.05,
+    l: 0,
+  },
+  {
+    get name() {
+      return t('workshop.swap.fire')
+    },
+    h: 36,
+    c: 1.2,
+    l: 0.02,
+  },
+  {
+    get name() {
+      return t('workshop.swap.shadow')
+    },
+    h: 296,
+    c: 0.55,
+    l: -0.12,
+  },
+  {
+    get name() {
+      return t('workshop.swap.gold')
+    },
+    h: 86,
+    c: 1.1,
+    l: 0.05,
+  },
 ] as { name: string; h?: number; c?: number; l?: number }[]
 
 const pack = (b: Buf, i: number) => (b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]
@@ -128,6 +236,29 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   const trayEl = $('.ws-tray')
   const toolNav = $('.ws-tools')
   const labelEl = $('.ws-label')
+  // The side panel is the only part of the workshop that scrolls. While more of it sits below
+  // the fold the chapter is flagged, and CSS draws a cue over the panel's foot.
+  const side = $('.ws-side')
+  const flagMore = () => el.classList.toggle('ws-more', side.scrollHeight - side.clientHeight - side.scrollTop > 6)
+  side.addEventListener('scroll', flagMore, { passive: true })
+  const sideWatch = new ResizeObserver(flagMore)
+  sideWatch.observe(side)
+  for (const child of side.children) sideWatch.observe(child)
+  let labelCopy = () => ''
+  let statCopy = () => ''
+  const showStat = (copy: () => string) => {
+    statCopy = copy
+    stat.textContent = copy()
+  }
+  const controlText = new Map<Node, () => void>()
+  function bindText(node: Node, copy: () => string) {
+    const update = () => {
+      node.textContent = copy()
+    }
+    controlText.set(node, update)
+    update()
+    return node
+  }
 
   main.width = main.height = N * SCALE
   fxc.width = fxc.height = N * SCALE
@@ -162,7 +293,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   }
 
   // ---- sprite loading -----------------------------------------------------------------
-  function load(src: HTMLCanvasElement | ImageData, label: string) {
+  function load(src: HTMLCanvasElement | ImageData, label: () => string) {
     let data: ImageData
     if (src instanceof ImageData) data = src
     else data = src.getContext('2d')!.getImageData(0, 0, 16, 16)
@@ -180,7 +311,8 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         colors.add(pack(base, d))
       }
     baseColors = colors.size
-    labelEl.textContent = label
+    labelCopy = label
+    labelEl.textContent = label()
     computeHeight()
     render()
     if (tool === 'swap') renderVariants()
@@ -214,7 +346,12 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         }
         let s = raw[i] * 2
         let w = 2
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (const [dx, dy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
           const xx = x + dx
           const yy = y + dy
           if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue
@@ -303,7 +440,9 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         o[k + 2] = c[2]
       }
     const used = colorCount(o)
-    stat.textContent = pal ? `${baseColors} 色 → ${used} 色 · ${stage.note}` : `${baseColors} 色 · ${stage.note}`
+    showStat(() =>
+      pal ? t('workshop.depth.stat', { base: baseColors, used, note: stage.note }) : t('workshop.depth.base', { base: baseColors, note: stage.note }),
+    )
     // the palette under the canvas: colours this sprite actually landed on are lit
     const seen = new Set<number>()
     for (let i = 0; i < o.length; i += 4) if (o[i + 3]) seen.add((o[i] << 16) | (o[i + 1] << 8) | o[i + 2])
@@ -388,7 +527,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     for (let i = 0; i < N * N; i++) if (steps[i] !== prevSteps[i]) changed++
     prevSteps = steps
     if (changed && active && !st.lightAuto) sound.tick(900 + Math.atan2(st.ly - 10, st.lx - 10) * 200 + 400, Math.min(0.02, 0.004 + changed * 0.0012))
-    stat.textContent = `颜色数 ${colorCount(res)}（原图 ${baseColors}）`
+    showStat(() => t('workshop.light.stat', { n: colorCount(res), base: baseColors }))
     return res
   }
 
@@ -413,11 +552,14 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       res[o + 2] = c[2]
       res[o + 3] = a
     }
-    const N4 = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+    const N4 = [
+      [0, -1],
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+    ]
     if (st.shadow) {
-      for (let y = N - 1; y >= 1; y--)
-        for (let x = N - 1; x >= 1; x--)
-          if (!opaque(x, y) && opaque(x - 1, y - 1)) set(x, y, [10, 8, 18], 140)
+      for (let y = N - 1; y >= 1; y--) for (let x = N - 1; x >= 1; x--) if (!opaque(x, y) && opaque(x - 1, y - 1)) set(x, y, [10, 8, 18], 140)
     }
     for (let y = 0; y < N; y++)
       for (let x = 0; x < N; x++) {
@@ -434,7 +576,8 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         const nb = N4.map(([dx, dy]) => [x + dx, y + dy]).filter(([a, b]) => opaque(a, b))
         if (st.outline === 'glow') {
           let near = 9
-          for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (opaque(x + dx, y + dy)) near = Math.min(near, Math.max(Math.abs(dx), Math.abs(dy)))
+          for (let dy = -2; dy <= 2; dy++)
+            for (let dx = -2; dx <= 2; dx++) if (opaque(x + dx, y + dy)) near = Math.min(near, Math.max(Math.abs(dx), Math.abs(dy)))
           if (near <= 2) {
             set(x, y, lchToRgb([Math.min(0.95, aL + 0.25), Math.max(0.12, aC), aH]), near === 1 ? 170 : 70)
             added++
@@ -452,7 +595,9 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         } else continue
         added++
       }
-    stat.textContent = st.outline === 'none' ? `原图 ${baseColors} 色` : `改动 ${added} 个像素 · 颜色数 ${colorCount(res)}`
+    showStat(() =>
+      st.outline === 'none' ? t('workshop.outline.original', { n: baseColors }) : t('workshop.outline.stat', { n: added, colours: colorCount(res) }),
+    )
     return res
   }
 
@@ -502,12 +647,17 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         b.setAttribute('aria-pressed', String(k === st.variant))
         const c = document.createElement('canvas')
         blit(c.getContext('2d')!, swapped(v), N, N * 4, { checker: false })
-        b.append(c, Object.assign(document.createElement('span'), { textContent: v.name }))
+        b.append(
+          c,
+          bindText(document.createElement('span'), () => v.name),
+        )
         b.addEventListener('click', () => {
           st.variant = k
           st.hue = 0
           sound.pop()
-          extra.querySelectorAll('button').forEach((x, j) => x.setAttribute('aria-pressed', String(j === k)))
+          extra.querySelectorAll('button').forEach((x, j) => {
+            x.setAttribute('aria-pressed', String(j === k))
+          })
           render()
         })
         return b
@@ -517,10 +667,10 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
 
   // ---- scale -----------------------------------------------------------------------------
   function renderScale() {
-    const panels: [string, (ctx: CanvasRenderingContext2D) => void][] = [
-      ['最近邻 ×4', (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false })],
-      ['双线性 ×4', (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false, smooth: true })],
-      ['Scale2x ×2 ×2', (ctx) => blit(ctx, scale2x(scale2x(base, N), N * 2), N * 4, N * 4 * 2, { checker: false })],
+    const panels: [() => string, (ctx: CanvasRenderingContext2D) => void][] = [
+      [() => t('workshop.scale.nearest'), (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false })],
+      [() => t('workshop.scale.bilinear'), (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false, smooth: true })],
+      [() => t('workshop.scale.algorithm'), (ctx) => blit(ctx, scale2x(scale2x(base, N), N * 2), N * 4, N * 4 * 2, { checker: false })],
     ]
     extra.replaceChildren(
       ...panels.map(([label, draw]) => {
@@ -528,11 +678,11 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         f.className = 'ws-panel'
         const c = document.createElement('canvas')
         draw(c.getContext('2d')!)
-        f.append(c, Object.assign(document.createElement('figcaption'), { textContent: label }))
+        f.append(c, bindText(document.createElement('figcaption'), label))
         return f
       }),
     )
-    stat.textContent = `Scale2x 之后颜色数 ${colorCount(scale2x(scale2x(base, N), N * 2))}（不变）`
+    showStat(() => t('workshop.scale.stat', { n: colorCount(scale2x(scale2x(base, N), N * 2)) }))
   }
 
   // ---- rotate ---------------------------------------------------------------------------
@@ -563,11 +713,11 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   let rotPanels: CanvasRenderingContext2D[] = []
   function setupRotate() {
     rotBig = scale2x(scale2x(scale2x(base, N), N * 2), N * 4)
-    rotPanels = ['直接旋转', 'RotSprite'].map((label) => {
+    rotPanels = [() => t('workshop.rotate.direct'), () => t('workshop.rotate.algorithm')].map((label) => {
       const f = document.createElement('figure')
       f.className = 'ws-panel'
       const c = document.createElement('canvas')
-      f.append(c, Object.assign(document.createElement('figcaption'), { textContent: label }))
+      f.append(c, bindText(document.createElement('figcaption'), label))
       extra.append(f)
       return c.getContext('2d')!
     })
@@ -580,11 +730,18 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     const a = st.angle
     blit(rotPanels[0], rotate(base, N, 1, a), R, R * 9, { checker: false })
     blit(rotPanels[1], rotate(rotBig!, N * 8, 8, a), R, R * 9, { checker: false })
-    stat.textContent = `角度 ${Math.round((((a * 180) / Math.PI) % 360 + 360) % 360)}°`
+    showStat(() => t('workshop.rotate.stat', { n: Math.round(((((a * 180) / Math.PI) % 360) + 360) % 360) }))
   }
 
   // ---- juice ------------------------------------------------------------------------------
-  const juice = { flashUntil: 0, stopUntil: 0, knockAt: 0, combo: 0, lastHit: 0, particles: [] as { x: number; y: number; vx: number; vy: number; c: string; life: number }[] }
+  const juice = {
+    flashUntil: 0,
+    stopUntil: 0,
+    knockAt: 0,
+    combo: 0,
+    lastHit: 0,
+    particles: [] as { x: number; y: number; vx: number; vy: number; c: string; life: number }[],
+  }
   function hit(px: number, py: number) {
     const now = performance.now()
     const j = st.juice
@@ -600,7 +757,20 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     }
     setTimeout(() => {
       if (j.knock) juice.knockAt = performance.now()
-      if (j.shake && !reducedMotion) gsap.fromTo(stageEl, { x: 0, y: 0 }, { x: () => (Math.random() - 0.5) * 14, y: () => (Math.random() - 0.5) * 10, duration: 0.04, repeat: 5, yoyo: true, ease: 'steps(1)', onComplete: () => void gsap.set(stageEl, { x: 0, y: 0 }) })
+      if (j.shake && !reducedMotion)
+        gsap.fromTo(
+          stageEl,
+          { x: 0, y: 0 },
+          {
+            x: () => (Math.random() - 0.5) * 14,
+            y: () => (Math.random() - 0.5) * 10,
+            duration: 0.04,
+            repeat: 5,
+            yoyo: true,
+            ease: 'steps(1)',
+            onComplete: () => void gsap.set(stageEl, { x: 0, y: 0 }),
+          },
+        )
       if (j.particles) {
         for (let k = 0; k < 14; k++) {
           let o = 0
@@ -611,7 +781,14 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
               break
             }
           }
-          juice.particles.push({ x: px, y: py, vx: (Math.random() - 0.3) * 7, vy: -Math.random() * 7 - 1, c: `rgb(${base[o]},${base[o + 1]},${base[o + 2]})`, life: 1 })
+          juice.particles.push({
+            x: px,
+            y: py,
+            vx: (Math.random() - 0.3) * 7,
+            vy: -Math.random() * 7 - 1,
+            c: `rgb(${base[o]},${base[o + 1]},${base[o + 2]})`,
+            life: 1,
+          })
         }
       }
       if (j.number) {
@@ -620,11 +797,16 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         d.textContent = crit ? `${20 + ((Math.random() * 20) | 0)}!` : `-${6 + ((Math.random() * 10) | 0)}`
         d.style.left = `${(px / (N * SCALE)) * 100}%`
         d.style.top = `${(py / (N * SCALE)) * 100}%`
-        stageEl.append(d)
-        gsap.fromTo(d, { y: 0, opacity: 1, scale: crit ? 1.6 : 1 }, { y: -70, opacity: 0, scale: 1, duration: 0.8, ease: 'steps(10)', onComplete: () => d.remove() })
+        // inside the canvas frame, so the percentages above are measured against the canvas
+        main.parentElement!.append(d)
+        gsap.fromTo(
+          d,
+          { y: 0, opacity: 1, scale: crit ? 1.6 : 1 },
+          { y: -70, opacity: 0, scale: 1, duration: 0.8, ease: 'steps(10)', onComplete: () => d.remove() },
+        )
       }
     }, delay)
-    stat.textContent = juice.combo > 1 ? `连击 ×${juice.combo}` : '再打一下'
+    showStat(() => (juice.combo > 1 ? t('workshop.juice.combo', { n: juice.combo }) : t('workshop.juice.again')))
   }
 
   function renderJuice(now: number) {
@@ -650,8 +832,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     }
     if (dx) {
       const sh = new Uint8ClampedArray(N * N * 4)
-      for (let y = 0; y < N; y++)
-        for (let x = dx; x < N; x++) for (let k = 0; k < 4; k++) sh[(y * N + x) * 4 + k] = buf[(y * N + x - dx) * 4 + k]
+      for (let y = 0; y < N; y++) for (let x = dx; x < N; x++) for (let k = 0; k < 4; k++) sh[(y * N + x) * 4 + k] = buf[(y * N + x - dx) * 4 + k]
       buf = sh
     }
     // particles on the fx layer
@@ -673,7 +854,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   }
 
   // ---- controls ---------------------------------------------------------------------------
-  function checkbox(label: string, get: () => boolean, set: (v: boolean) => void) {
+  function checkbox(label: () => string, get: () => boolean, set: (v: boolean) => void) {
     const l = document.createElement('label')
     l.className = 'toggle pix'
     const i = document.createElement('input')
@@ -684,22 +865,27 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       sound.click()
       render()
     })
-    l.append(i, ` ${label}`)
+    l.append(
+      i,
+      bindText(document.createTextNode(''), () => ` ${label()}`),
+    )
     return l
   }
-  function radios(name: string, opts: [string, string][], get: () => string, set: (v: string) => void) {
+  function radios(name: string, opts: [string, () => string][], get: () => string, set: (v: string) => void) {
     const wrap = document.createElement('div')
     wrap.className = 'ws-radios'
     for (const [v, label] of opts) {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = 'chip'
-      b.textContent = label
+      bindText(b, label)
       b.setAttribute('aria-pressed', String(get() === v))
       b.addEventListener('click', () => {
         set(v)
         sound.pop()
-        wrap.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)))
+        wrap.querySelectorAll('button').forEach((x) => {
+          x.setAttribute('aria-pressed', String(x === b))
+        })
         render()
       })
       wrap.append(b)
@@ -707,7 +893,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     wrap.dataset.name = name
     return wrap
   }
-  function slider(label: string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) {
+  function slider(label: () => string, min: number, max: number, step: number, get: () => number, set: (v: number) => void) {
     const l = document.createElement('label')
     l.className = 'ws-slider pix'
     const i = document.createElement('input')
@@ -720,17 +906,21 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       set(Number(i.value))
       render()
     })
-    l.append(label, i)
+    l.append(bindText(document.createTextNode(''), label), i)
     return l
   }
 
   function setTool(id: ToolId) {
+    controlText.clear()
     tool = id
-    const t = TOOLS.find((x) => x.id === id)!
-    nameEl.textContent = t.name
-    descEl.textContent = t.desc
-    toolNav.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === id)))
+    const selectedTool = TOOLS.find((x) => x.id === id)!
+    nameEl.textContent = selectedTool.name
+    descEl.textContent = selectedTool.desc
+    toolNav.querySelectorAll('button').forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.tool === id))
+    })
     el.dataset.tool = id
+    side.scrollTop = 0
     extra.replaceChildren()
     extra.className = 'ws-extra'
     rotBig = null
@@ -738,58 +928,110 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     const c: HTMLElement[] = []
     if (id === 'depth') {
       c.push(
-        radios('depth', DEPTHS.map((d, i) => [String(i), d.key] as [string, string]), () => String(st.depth), (v) => {
-          st.depth = Number(v)
-          sound.eraJingle(st.depth)
-        }),
+        radios(
+          'depth',
+          DEPTHS.map((d, i) => [String(i), () => d.key] as [string, () => string]),
+          () => String(st.depth),
+          (v) => {
+            st.depth = Number(v)
+            sound.eraJingle(st.depth)
+          },
+        ),
       )
-      c.push(checkbox('有序抖动', () => st.dither, (v) => (st.dither = v)))
+      c.push(
+        checkbox(
+          () => t('workshop.depth.dither'),
+          () => st.dither,
+          (v) => (st.dither = v),
+        ),
+      )
     } else if (id === 'light') {
-      c.push(checkbox('量化到色阶', () => !st.smooth, (v) => (st.smooth = !v)))
-      c.push(checkbox('色相偏移（冷影暖光）', () => st.hueShift, (v) => (st.hueShift = v)))
-      c.push(slider('光源高度', 2, 16, 0.5, () => st.lz, (v) => (st.lz = v)))
+      c.push(
+        checkbox(
+          () => t('workshop.light.quantise'),
+          () => !st.smooth,
+          (v) => (st.smooth = !v),
+        ),
+      )
+      c.push(
+        checkbox(
+          () => t('workshop.light.hue'),
+          () => st.hueShift,
+          (v) => (st.hueShift = v),
+        ),
+      )
+      c.push(
+        slider(
+          () => t('workshop.light.height'),
+          2,
+          16,
+          0.5,
+          () => st.lz,
+          (v) => (st.lz = v),
+        ),
+      )
     } else if (id === 'outline') {
       c.push(
         radios(
           'outline',
           [
-            ['none', '无'],
-            ['black', '黑色外描边'],
-            ['selout', '选择性描边'],
-            ['color', '同色系外描边'],
-            ['inner', '内描边'],
-            ['glow', '外发光'],
+            ['none', () => t('workshop.outline.none')],
+            ['black', () => t('workshop.outline.black')],
+            ['selout', () => t('workshop.outline.selective')],
+            ['color', () => t('workshop.outline.colour')],
+            ['inner', () => t('workshop.outline.inner')],
+            ['glow', () => t('workshop.outline.glow')],
           ],
           () => st.outline,
           (v) => (st.outline = v),
         ),
       )
-      c.push(checkbox('投影', () => st.shadow, (v) => (st.shadow = v)))
+      c.push(
+        checkbox(
+          () => t('workshop.outline.shadow'),
+          () => st.shadow,
+          (v) => (st.shadow = v),
+        ),
+      )
     } else if (id === 'swap') {
       renderVariants()
     } else if (id === 'scale') {
       renderScale()
     } else if (id === 'rotate') {
       c.push(
-        slider('角度', 0, 6.283, 0.01, () => st.angle, (v) => {
-          st.angle = v
-          st.rotAuto = false
-        }),
+        slider(
+          () => t('workshop.rotate.angle'),
+          0,
+          6.283,
+          0.01,
+          () => st.angle,
+          (v) => {
+            st.angle = v
+            st.rotAuto = false
+          },
+        ),
       )
     } else if (id === 'juice') {
       const j = st.juice
-      const opts: [keyof typeof j, string][] = [
-        ['stop', '顿帧'],
-        ['flash', '闪白'],
-        ['shake', '震屏'],
-        ['knock', '击退'],
-        ['particles', '粒子'],
-        ['number', '飘字'],
-        ['sound', '音效'],
+      const opts: [keyof typeof j, () => string][] = [
+        ['stop', () => t('workshop.juice.stop')],
+        ['flash', () => t('workshop.juice.flash')],
+        ['shake', () => t('workshop.juice.shake')],
+        ['knock', () => t('workshop.juice.knock')],
+        ['particles', () => t('workshop.juice.particles')],
+        ['number', () => t('workshop.juice.number')],
+        ['sound', () => t('workshop.juice.sound')],
       ]
       const wrap = document.createElement('div')
       wrap.className = 'ws-checks'
-      for (const [k, label] of opts) wrap.append(checkbox(label, () => j[k], (v) => (j[k] = v)))
+      for (const [k, label] of opts)
+        wrap.append(
+          checkbox(
+            label,
+            () => j[k],
+            (v) => (j[k] = v),
+          ),
+        )
       c.push(wrap)
     }
     controls.replaceChildren(...c)
@@ -810,7 +1052,11 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         break
       case 'swap':
         out = swapped(VARIANTS[st.variant], st.hue)
-        stat.textContent = st.hue ? `色相 ${st.hue > 0 ? '+' : ''}${Math.round(st.hue)}° · ${VARIANTS[st.variant].name}` : VARIANTS[st.variant].name
+        showStat(() =>
+          st.hue
+            ? t('workshop.swap.stat', { hue: `${st.hue > 0 ? '+' : ''}${Math.round(st.hue)}`, name: VARIANTS[st.variant].name })
+            : VARIANTS[st.variant].name,
+        )
         break
       case 'scale':
         out = base
@@ -835,7 +1081,12 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   let dragX: number | null = null
   const toBuf = (e: PointerEvent) => {
     const r = main.getBoundingClientRect()
-    return { x: ((e.clientX - r.left) / r.width) * N, y: ((e.clientY - r.top) / r.height) * N, px: ((e.clientX - r.left) / r.width) * N * SCALE, py: ((e.clientY - r.top) / r.height) * N * SCALE }
+    return {
+      x: ((e.clientX - r.left) / r.width) * N,
+      y: ((e.clientY - r.top) / r.height) * N,
+      px: ((e.clientX - r.left) / r.width) * N * SCALE,
+      py: ((e.clientY - r.top) / r.height) * N * SCALE,
+    }
   }
   main.addEventListener('pointermove', (e) => {
     const p = toBuf(e)
@@ -848,7 +1099,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       const dx = e.clientX - dragX
       dragX = e.clientX
       if (tool === 'swap') {
-        st.hue = (((st.hue + dx * 1.2 + 180) % 360) + 360) % 360 - 180
+        st.hue = ((((st.hue + dx * 1.2 + 180) % 360) + 360) % 360) - 180
         if (Math.abs(dx) > 0) sound.tick(800 + ((st.hue + 180) / 360) * 1600, 0.012)
       } else {
         st.angle += dx * 0.012
@@ -883,17 +1134,17 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     if ((e.target as HTMLElement).closest('[data-tool]')) sound.tick(2000, 0.01)
   })
 
-  type TrayItem = { url: string; label: string; src: HTMLCanvasElement | ImageData }
+  type TrayItem = { url: string; label: () => string; src: HTMLCanvasElement | ImageData }
   const tray = sprites.slice(0, 14)
   /** sprites brought in from outside the preset strip: from the star map, or the visitor's own files */
   const customs: TrayItem[] = []
   function renderTray() {
-    const items: TrayItem[] = [...customs, ...tray.map((s) => ({ url: s.url, label: s.caption, src: s.data }))]
+    const items: TrayItem[] = [...customs, ...tray.map((s) => ({ url: s.url, label: () => s.caption, src: s.data }))]
     trayEl.replaceChildren(
       ...items.map((it, i) => {
         const b = document.createElement('button')
         b.type = 'button'
-        b.title = it.label
+        b.title = it.label()
         if (i < customs.length) b.className = 'is-own'
         b.innerHTML = `<img src="${it.url}" alt="">`
         b.addEventListener('click', () => {
@@ -904,7 +1155,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       }),
     )
   }
-  function adopt(c: HTMLCanvasElement, label: string) {
+  function adopt(c: HTMLCanvasElement, label: () => string) {
     customs.unshift({ url: c.toDataURL(), label, src: c })
     if (customs.length > 7) customs.pop()
     renderTray()
@@ -916,20 +1167,22 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   const importBtn = $<HTMLButtonElement>('.ws-import')
   const fileInput = $<HTMLInputElement>('.ws-file')
   const importNote = $('.ws-import-note')
-  const NOTE = importNote.textContent ?? ''
-  const note = (t: string, bad = false) => {
-    importNote.textContent = t
+  const NOTE = () => t('workshop.importNote')
+  let noteCopy = NOTE
+  const note = (copy: () => string, bad = false) => {
+    noteCopy = copy
+    importNote.textContent = copy()
     importNote.classList.toggle('bad', bad)
   }
   /** fit any picture into 16×16: trim the empty border, then shrink (pixel art by sampling, photos by averaging) */
-  async function importImage(file: Blob, name: string) {
-    if (!file.type.startsWith('image/')) return note('这不是图片文件', true)
-    if (file.size > 24 * 1024 * 1024) return note('图片太大了（上限 24 MB）', true)
+  async function importImage(file: Blob, name: () => string) {
+    if (!file.type.startsWith('image/')) return note(() => t('workshop.import.invalid'), true)
+    if (file.size > 24 * 1024 * 1024) return note(() => t('workshop.import.large'), true)
     let bmp: ImageBitmap
     try {
       bmp = await createImageBitmap(file)
     } catch {
-      return note('这张图片读不出来，换一张试试', true)
+      return note(() => t('workshop.import.unreadable'), true)
     }
     // very large photos are shrunk first so reading their pixels stays cheap
     const pre = Math.min(1, 1024 / Math.max(bmp.width, bmp.height))
@@ -943,7 +1196,10 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     fc.drawImage(bmp, 0, 0, w, h)
     bmp.close()
     const px = fc.getImageData(0, 0, w, h).data
-    let x0 = w, y0 = h, x1 = -1, y1 = -1
+    let x0 = w,
+      y0 = h,
+      x1 = -1,
+      y1 = -1
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++)
         if (px[(y * w + x) * 4 + 3] > 24) {
@@ -952,7 +1208,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
           if (y < y0) y0 = y
           if (y > y1) y1 = y
         }
-    if (x1 < 0) return note('这张图是全透明的', true)
+    if (x1 < 0) return note(() => t('workshop.import.empty'), true)
     const bw = x1 - x0 + 1
     const bh = y1 - y0 + 1
     const side = Math.max(bw, bh)
@@ -998,16 +1254,19 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         cx.drawImage(cur, 0, 0, cur.width, cur.height, ox, oy, dw, dh)
       }
     }
-    const short = name.replace(/\.[a-z0-9]+$/i, '').slice(0, 24) || '导入的图片'
-    adopt(c, `你的图片：${short}`)
+    const short = () =>
+      name()
+        .replace(/\.[a-z0-9]+$/i, '')
+        .slice(0, 24) || t('workshop.import.unnamed')
+    adopt(c, () => t('workshop.import.own', { name: short() }))
     sound.sparkle()
-    note(side > 16 ? `已从 ${bw}×${bh} 缩成 16×16 · 试试“色深”把颜色压下来` : '已载入 · 现在它也是素材了')
-    window.setTimeout(() => importNote.textContent !== NOTE && note(NOTE), 6000)
+    note(() => (side > 16 ? t('workshop.import.resized', { w: bw, h: bh }) : t('workshop.import.loaded')))
+    window.setTimeout(() => noteCopy !== NOTE && note(NOTE), 6000)
   }
   importBtn.addEventListener('click', () => fileInput.click())
   fileInput.addEventListener('change', () => {
     const f = fileInput.files?.[0]
-    if (f) importImage(f, f.name)
+    if (f) importImage(f, () => f.name)
     fileInput.value = ''
   })
   el.addEventListener('dragover', (e) => {
@@ -1022,14 +1281,14 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     e.preventDefault()
     el.classList.remove('is-drop')
     const f = e.dataTransfer?.files[0]
-    if (f) importImage(f, f.name)
+    if (f) importImage(f, () => f.name)
   })
   window.addEventListener('paste', (e) => {
     if (!active) return
     const f = [...(e.clipboardData?.files ?? [])].find((q) => q.type.startsWith('image/'))
     if (!f) return
     e.preventDefault()
-    importImage(f, '剪贴板')
+    importImage(f, () => t('workshop.import.clipboard'))
   })
 
   el.querySelector('.ws-export')!.addEventListener('click', () => {
@@ -1061,13 +1320,30 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   }
 
   const first = sprites.find((s) => /apple|orb/.test(s.subject)) ?? sprites[0]
-  load(first.data, first.caption)
+  load(first.data, () => first.caption)
   setTool('depth')
+
+  onLocaleChange(() => {
+    const selectedTool = TOOLS.find((item) => item.id === tool)!
+    nameEl.textContent = selectedTool.name
+    descEl.textContent = selectedTool.desc
+    controlText.forEach((update, node) => {
+      if (node.isConnected) update()
+      else controlText.delete(node)
+    })
+    labelEl.textContent = labelCopy()
+    stat.textContent = statCopy()
+    importNote.textContent = noteCopy()
+    const items = [...customs, ...tray.map((sprite) => ({ label: () => sprite.caption }))]
+    trayEl.querySelectorAll('button').forEach((button, i) => {
+      button.title = items[i].label()
+    })
+  })
 
   return {
     id: 'workshop',
     num: '03',
-    title: '共创工坊',
+    title: () => t('nav.workshop'),
     color: '#1b1626',
     transition: 'iris',
     el,
@@ -1076,7 +1352,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       c.width = c.height = 16
       if (src instanceof ImageData) c.getContext('2d')!.putImageData(src, 0, 0)
       else c.getContext('2d')!.drawImage(src, 0, 0)
-      adopt(c, `来自星图：${label}`)
+      adopt(c, () => t('workshop.import.atlas', { name: label }))
     },
     enter() {
       active = true

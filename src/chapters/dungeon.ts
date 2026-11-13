@@ -1,14 +1,16 @@
 /**
- * 04 · 地牢. The cursor is a torch; clicking plants another one. Light is
+ * 04 · Dungeon. The cursor is a torch; clicking plants another one. Light is
  * computed on an 8-px grid and banded with ordered dither, so even the light
  * is made of pixels.
  */
+
 import { sound } from '../audio'
 import { GameShell } from '../game'
-import { createCrawl } from './dungeon-game'
+import { onLocaleChange, t } from '../i18n'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
+import { createCrawl } from './dungeon-game'
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16)
 const LIGHT_PX = 8 // one light-map texel = 8 css px, so the light itself is pixelated
@@ -68,7 +70,7 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[], hero?: Sprite)
   let img: ImageData | null = null
 
   function updateCount() {
-    countEl.textContent = `已插 ${planted.length}/${MAX_TORCHES}`
+    countEl.textContent = t('dungeon.count', { n: planted.length, max: MAX_TORCHES })
     sound.set('fire', planted.length / MAX_TORCHES)
   }
 
@@ -104,10 +106,10 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[], hero?: Sprite)
   const gameCanvas = el.querySelector<HTMLCanvasElement>('.dungeon-game')!
   const crawl = createCrawl(gameCanvas, sprites, hero, {
     score: (n) => shell.score(n),
-    extra: (html) => shell.extra(html),
+    extra: (html) => shell.extra(html, true),
     end: (score, title, sub, won) => shell.end(score, title, sub, won),
   })
-  const shell: GameShell = new GameShell(el, 'dungeon', '摸黑寻宝', {
+  const shell: GameShell = new GameShell(el, 'dungeon', () => t('game.dungeon'), {
     start() {
       gameCanvas.hidden = false
       tip.style.opacity = '0'
@@ -180,10 +182,11 @@ export function createDungeon(el: HTMLElement, sprites: Sprite[], hero?: Sprite)
   }
 
   updateCount()
+  onLocaleChange(updateCount)
   return {
     id: 'dungeon',
     num: '02',
-    title: '地牢',
+    title: () => t('world.dungeon'),
     color: '#0b0a10',
     transition: 'slash',
     ambience: 'dungeon',

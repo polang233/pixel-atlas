@@ -1,10 +1,12 @@
 /**
- * 地牢 mini game · 摸黑寻宝. A small generated maze seen only by torchlight.
+ * Dungeon mini game · Treasure in the Dark. A small generated maze seen only by torchlight.
  * The torch is your sight and burns down as you walk; three hearts are your
  * life. Swing the sword at what bites, smash barrels, open chests, light
  * braziers, pray at idols. Find the key, find the door, go one floor deeper.
  */
+
 import { sound } from '../audio'
+import { onLocaleChange, t } from '../i18n'
 import { drawText, textWidth } from '../pixelfont'
 import type { Sprite } from '../sprites'
 
@@ -17,18 +19,54 @@ const LP = 2 // one light texel = 2 game pixels
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16)
 
 type ItemKind = 'coin' | 'torch' | 'key' | 'door' | 'chest' | 'mimic' | 'brazier' | 'web' | 'barrel' | 'potion' | 'spikes' | 'idol'
-interface Item { kind: ItemKind; x: number; y: number; img: HTMLCanvasElement; taken: boolean; lit: boolean; t: number }
+interface Item {
+  kind: ItemKind
+  x: number
+  y: number
+  img: HTMLCanvasElement
+  taken: boolean
+  lit: boolean
+  t: number
+}
 type MobKind = 'rat' | 'spider' | 'skull' | 'skeleton' | 'mimic'
-interface Mob { kind: MobKind; x: number; y: number; vx: number; vy: number; img: HTMLCanvasElement; t: number; next: number; face: number; hp: number; max: number; hit: number; kx: number; ky: number }
+interface Mob {
+  kind: MobKind
+  x: number
+  y: number
+  vx: number
+  vy: number
+  img: HTMLCanvasElement
+  t: number
+  next: number
+  face: number
+  hp: number
+  max: number
+  hit: number
+  kx: number
+  ky: number
+}
 const MOB_HP: Record<MobKind, number> = { rat: 1, spider: 2, skull: 2, skeleton: 3, mimic: 4 }
 const MOB_SCORE: Record<MobKind, number> = { rat: 50, spider: 120, skull: 150, skeleton: 220, mimic: 400 }
-interface Bit { x: number; y: number; vx: number; vy: number; life: number; c: string }
-interface Pop { x: number; y: number; s: string; life: number; c: string }
+interface Bit {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  life: number
+  c: string
+}
+interface Pop {
+  x: number
+  y: number
+  s: string
+  life: number
+  c: string
+}
 
 export interface CrawlUI {
   score(n: number): void
-  extra(html: string): void
-  end(score: number, title: string, sub: string, won: boolean): void
+  extra(html: () => string): void
+  end(score: number, title: () => string, sub: () => string, won: boolean): void
 }
 
 export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: Sprite | undefined, ui: CrawlUI) {
@@ -43,7 +81,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     const list = sprites.filter((s) => re.test(s.subject))
     return (list.length ? list : sprites.slice(0, 1)).map(sc)
   }
-  const one = <V,>(list: V[]) => list[(Math.random() * list.length) | 0]
+  const one = <V>(list: V[]) => list[(Math.random() * list.length) | 0]
   const IMG = {
     hero: hero ? [sc(hero)] : all(/skeleton warrior/),
     coin: all(/^coin/),
@@ -79,7 +117,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       c.fillRect(k === 1 ? 7 : 0, 0, 1, T)
       if (k === 2) c.fillRect(0, 8, T, 1)
       c.fillStyle = '#353243'
-      for (let i = 0; i < 5; i++) c.fillRect((i * 7 + k * 3) % 15, (i * 5 + k * 6) % 14 + 1, 1, 1)
+      for (let i = 0; i < 5; i++) c.fillRect((i * 7 + k * 3) % 15, ((i * 5 + k * 6) % 14) + 1, 1, 1)
     }),
   )
   const wallTop = tile((c) => {
@@ -122,7 +160,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
   let shake = 0
   let fade = 0 // 1 → black, used between floors
   let fadeDir = 0
-  let hint = ''
+  let hint = () => ''
   let hintUntil = 0
   let last = 0
   let running = false
@@ -138,8 +176,10 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
 
   const solid = (tx: number, ty: number) => tx < 0 || ty < 0 || tx >= MW || ty >= MH || map[ty * MW + tx] === 1
   const blocked = (x: number, y: number, r: number) =>
-    solid(Math.floor((x - r) / T), Math.floor((y - r) / T)) || solid(Math.floor((x + r) / T), Math.floor((y - r) / T)) ||
-    solid(Math.floor((x - r) / T), Math.floor((y + r) / T)) || solid(Math.floor((x + r) / T), Math.floor((y + r) / T))
+    solid(Math.floor((x - r) / T), Math.floor((y - r) / T)) ||
+    solid(Math.floor((x + r) / T), Math.floor((y - r) / T)) ||
+    solid(Math.floor((x - r) / T), Math.floor((y + r) / T)) ||
+    solid(Math.floor((x + r) / T), Math.floor((y + r) / T))
   function slide(o: { x: number; y: number }, dx: number, dy: number, r: number) {
     if (!blocked(o.x + dx, o.y, r)) o.x += dx
     if (!blocked(o.x, o.y + dy, r)) o.y += dy
@@ -160,7 +200,8 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
   function generate() {
     map = new Uint8Array(MW * MH).fill(1)
     const carve = (x: number, y: number) => (map[y * MW + x] = 0)
-    for (let cy = 0; cy < CH; cy++) for (let cx = 0; cx < CW; cx++) for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) carve(1 + cx * 4 + dx, 1 + cy * 4 + dy)
+    for (let cy = 0; cy < CH; cy++)
+      for (let cx = 0; cx < CW; cx++) for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) carve(1 + cx * 4 + dx, 1 + cy * 4 + dy)
     const links = new Map<number, number[]>()
     const link = (a: number, b: number) => {
       links.set(a, [...(links.get(a) ?? []), b])
@@ -200,10 +241,12 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       const d = new Array<number>(CW * CH).fill(-1)
       d[from] = 0
       const q = [from]
-      for (let i = 0; i < q.length; i++) for (const n of links.get(q[i])!) if (d[n] < 0) {
-        d[n] = d[q[i]] + 1
-        q.push(n)
-      }
+      for (let i = 0; i < q.length; i++)
+        for (const n of links.get(q[i])!)
+          if (d[n] < 0) {
+            d[n] = d[q[i]] + 1
+            q.push(n)
+          }
       return d
     }
     const d0 = dist(0)
@@ -227,18 +270,30 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     }
     put('door', doorCell, one(IMG.door))
     put('key', keyCell, one(IMG.key))
-    const free = Array.from({ length: CW * CH }, (_, c) => c).filter((c) => c !== 0 && c !== doorCell && c !== keyCell).sort(() => Math.random() - 0.5)
+    const free = Array.from({ length: CW * CH }, (_, c) => c)
+      .filter((c) => c !== 0 && c !== doorCell && c !== keyCell)
+      .sort(() => Math.random() - 0.5)
     const take = (n: number) => free.splice(0, n)
-    take(Math.max(3, 6 - floor)).forEach((c) => put('torch', c, one(IMG.torch)))
-    take(4).forEach((c) => put('brazier', c, one(IMG.brazier)))
-    take(3).forEach((c, i) => put(i === 0 && floor > 1 ? 'mimic' : 'chest', c, one(IMG.chest)))
-    take(1).forEach((c) => put('idol', c, one(IMG.idol)))
+    take(Math.max(3, 6 - floor)).forEach((c) => {
+      put('torch', c, one(IMG.torch))
+    })
+    take(4).forEach((c) => {
+      put('brazier', c, one(IMG.brazier))
+    })
+    take(3).forEach((c, i) => {
+      put(i === 0 && floor > 1 ? 'mimic' : 'chest', c, one(IMG.chest))
+    })
+    take(1).forEach((c) => {
+      put('idol', c, one(IMG.idol))
+    })
     for (let i = 0; i < 9; i++) put('barrel', 1 + ((Math.random() * (CW * CH - 1)) | 0), one(IMG.barrel), i % 3, i % 2 ? 0 : 2)
     for (let i = 0; i < 3 + floor; i++) {
       const c = 1 + ((Math.random() * (CW * CH - 1)) | 0)
       if (c !== doorCell && c !== keyCell) put('spikes', c, floors[0], (Math.random() * 3) | 0, 1)
     }
-    take(4).forEach((c) => put('web', c, one(IMG.web), (Math.random() * 3) | 0, (Math.random() * 3) | 0))
+    take(4).forEach((c) => {
+      put('web', c, one(IMG.web), (Math.random() * 3) | 0, (Math.random() * 3) | 0)
+    })
     for (let c = 1; c < CW * CH; c++) {
       if (c === doorCell || Math.random() > 0.55) continue
       const n = 1 + ((Math.random() * 3) | 0)
@@ -266,10 +321,14 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     for (let i = 0; i < n; i++) bits.push({ x, y, vx: (Math.random() - 0.5) * 110, vy: (Math.random() - 0.7) * 110, life: 0.35 + Math.random() * 0.35, c })
   }
   const pop = (x: number, y: number, s: string, c = '#ffd84d') => pops.push({ x, y, s, life: 1, c })
-  const say = (s: string, ms = 2200) => {
+  const say = (s: () => string, ms = 2200) => {
     hint = s
     hintUntil = performance.now() + ms
   }
+  onLocaleChange(() => {
+    const el = canvas.nextElementSibling
+    if (el) el.textContent = hint()
+  })
   const radius = () => (1.35 + 4.1 * Math.sqrt(Math.max(0, fuel) / 100)) * T
 
   function bite(amount: number, fromX: number, fromY: number) {
@@ -286,7 +345,12 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     if (hp <= 0) {
       alive = false
       sound.tone(240, 1.1, { type: 'triangle', vol: 0.05, slide: 50 })
-      ui.end(score, `倒在了第 ${floor} 层`, `击倒 ${kills} 只怪物 · 剑还握在手里`, floor >= 3)
+      ui.end(
+        score,
+        () => t('dungeon.fell', { floor }),
+        () => t('dungeon.result', { n: kills }),
+        floor >= 3,
+      )
     }
   }
 
@@ -295,7 +359,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     kills++
     score += MOB_SCORE[m.kind]
     burst(m.x, m.y, m.kind === 'skull' ? '#c8f4ff' : '#e8e2d0', 14)
-    pop(m.x, m.y - 10, '+' + MOB_SCORE[m.kind], '#c8f4ff')
+    pop(m.x, m.y - 10, `+${MOB_SCORE[m.kind]}`, '#c8f4ff')
     sound.stomp()
     const r = Math.random()
     if (m.kind === 'mimic') for (let i = 0; i < 5; i++) drop('coin', m.x, m.y)
@@ -314,7 +378,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
   }
   function wakeMimic(it: Item) {
     it.taken = true
-    say('是宝箱怪！砍它！')
+    say(() => t('dungeon.say.mimic'))
     spawn('mimic', it.x, it.y)
     sound.eyeOpen()
     shake = 0.25
@@ -381,8 +445,8 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     if (best.kind === 'chest') openChest(best)
     else if (best.kind === 'mimic') wakeMimic(best)
     else if (best.kind === 'idol') {
-      if (best.lit) say('神像已经闭上了眼')
-      else if (score < 300) say('神像要 300 分的供奉')
+      if (best.lit) say(() => t('dungeon.say.shrineUsed'))
+      else if (score < 300) say(() => t('dungeon.say.shrineCost'))
       else {
         best.lit = true
         score -= 300
@@ -391,9 +455,9 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
         sound.banish()
         burst(best.x, best.y, '#c8f4ff', 20)
         pop(best.x, best.y - 12, '+1 MAX', '#ff8fa3')
-        say('献上 300 分 · 生命上限 +1，伤口愈合')
+        say(() => t('dungeon.say.shrineHeal'))
       }
-    } else if (best.kind === 'door' && !hasKey && now > hintUntil) say('门锁着 · 先找到钥匙')
+    } else if (best.kind === 'door' && !hasKey && now > hintUntil) say(() => t('dungeon.say.locked'))
   }
 
   function update(dt: number, now: number) {
@@ -416,7 +480,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
         floor++
         fuel = Math.min(100, fuel + 30)
         generate()
-        say(`第 ${floor} 层 · 更深，也更黑`)
+        say(() => t('dungeon.say.deeper', { floor }))
         fadeDir = -1
       } else if (fade <= 0) fadeDir = 0
       return
@@ -483,7 +547,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
           it.taken = true
           hasKey = true
           sound.lock()
-          say('拿到钥匙了 · 去找那扇发蓝光的门')
+          say(() => t('dungeon.say.keyFound'))
           burst(it.x, it.y, '#fff3b0', 14)
           break
         case 'brazier':
@@ -497,10 +561,10 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
           break
         case 'chest':
         case 'mimic':
-          if (now > hintUntil) say('挥剑或按 E 开箱', 900)
+          if (now > hintUntil) say(() => t('dungeon.say.chest'), 900)
           break
         case 'idol':
-          if (!it.lit && now > hintUntil) say('骷髅神像 · 按 E 献上 300 分，换一颗心', 900)
+          if (!it.lit && now > hintUntil) say(() => t('dungeon.say.shrine'), 900)
           break
         case 'potion':
           if (hp >= maxHp) break
@@ -521,7 +585,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
             score += 500 * floor
             sound.door()
             fadeDir = 1
-          } else if (now > hintUntil) say('门锁着 · 先找到钥匙')
+          } else if (now > hintUntil) say(() => t('dungeon.say.locked'))
           break
         case 'web':
           break
@@ -606,11 +670,11 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
     }
 
     mobs = mobs.filter((m) => m.t >= 0)
-    if (fuel <= 0 && now > hintUntil && Math.floor(now / 4000) % 2 === 0) say('火把烧完了 · 找一支新的，或者点亮灯台', 1500)
+    if (fuel <= 0 && now > hintUntil && Math.floor(now / 4000) % 2 === 0) say(() => t('dungeon.say.fuel'), 1500)
     sound.set('fire', fuel / 100)
     ui.score(score)
     const hearts = Array.from({ length: maxHp }, (_, i) => `<i class="${i < hp ? 'on' : ''}"></i>`).join('')
-    ui.extra(`<span class="hp">${hearts}</span><span class="fuel${fuel < 25 ? ' low' : ''}"><i style="width:${Math.round(fuel)}%"></i></span> 第 ${floor} 层 · 钥匙 ${hasKey ? '<b>✓</b>' : '—'}`)
+    ui.extra(() => t('dungeon.hudHtml', { hearts, low: fuel < 25 ? ' low' : '', fuel: Math.round(fuel), floor, key: hasKey ? '<b>✓</b>' : '—' }))
   }
 
   function render(now: number) {
@@ -779,14 +843,25 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       for (const p of pops) drawText(ctx, p.s, Math.round(p.x - ox - textWidth(p.s) / 2), Math.round(p.y - oy), p.c)
       if (now < hintUntil) {
         const el = canvas.nextElementSibling as HTMLElement | null
-        if (el && el.textContent !== hint) el.textContent = hint
+        if (el && el.textContent !== hint()) el.textContent = hint()
         el?.classList.add('on')
       } else (canvas.nextElementSibling as HTMLElement | null)?.classList.remove('on')
     }
   }
 
   const KEYMAP: Record<string, string> = {
-    ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r', ArrowUp: 'u', w: 'u', W: 'u', ArrowDown: 'd', s: 'd', S: 'd',
+    ArrowLeft: 'l',
+    a: 'l',
+    A: 'l',
+    ArrowRight: 'r',
+    d: 'r',
+    D: 'r',
+    ArrowUp: 'u',
+    w: 'u',
+    W: 'u',
+    ArrowDown: 'd',
+    s: 'd',
+    S: 'd',
   }
   window.addEventListener('keydown', (e) => {
     if (!running) return
@@ -857,7 +932,7 @@ export function createCrawl(canvas: HTMLCanvasElement, sprites: Sprite[], hero: 
       W = 0
       last = performance.now()
       running = true
-      say('空格挥剑 · E 互动 · 找到钥匙，再找到门', 3800)
+      say(() => t('dungeon.say.start'), 3800)
     },
     stop() {
       running = false

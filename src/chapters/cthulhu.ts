@@ -1,12 +1,13 @@
 import { sound } from '../audio'
 import { GameShell } from '../game'
+import { onLocaleChange, t } from '../i18n'
+import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
-import type { Sprite } from '../sprites'
-import { createStalk } from './cthulhu-game'
+import { createSeal } from './cthulhu-seal'
 
-// only glyphs the pixel font actually has, so nothing falls back to tofu
-const GLYPHS = '▓▒░▚▞◢◣◤◥◆◇◎※¤§¶†‡☉☽☾♁♅♆ΔΘΞΨΩλψωж巛彡屮◬'
+// Keep the same decorative glitch marks in both locales; the escaped codepoints are not words.
+const GLYPHS = '▓▒░▚▞◢◣◤◥◆◇◎※¤§¶†‡☉☽☾♁♅♆ΔΘΞΨΩλψωж\u5ddb\u5f61\u5c6e◬'
 
 export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
   const field = el.querySelector<HTMLElement>('.cth-field')!
@@ -17,7 +18,7 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
   const bar = el.querySelector<HTMLElement>('.san-bar i')!
   const num = el.querySelector<HTMLElement>('.san-num')!
   const hint = el.querySelector<HTMLElement>('.cth-hint')!
-  const src = text.dataset.src ?? ''
+  let src = text.dataset.src ?? ''
   text.textContent = src
 
   const imgs = [...sprites, ...sprites].slice(0, 81).map((s) => {
@@ -42,10 +43,11 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
     field.style.filter = `url(#madness) saturate(${0.75 - m * 0.55}) hue-rotate(${m * -40}deg) contrast(${1 + m * 0.3})`
     disp.setAttribute('scale', String(m * m * 46))
     sound.set('madness', m)
-    hint.textContent = san <= 0 ? '你已看见太多。往回滚，或者离开这里。' : '继续向下……如果你确定的话'
+    hint.textContent = san <= 0 ? t('cthulhu.tooMuch') : t('cthulhu.hint')
   }
 
   function frame(t: number) {
+    if (!active || document.hidden) return
     const m = 1 - san / 100
     if (!reducedMotion) {
       turb.setAttribute('baseFrequency', `${0.01 + 0.004 * Math.sin(t / 900)} ${0.028 + 0.01 * Math.cos(t / 700)}`)
@@ -68,13 +70,14 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
     if (active) raf = requestAnimationFrame(frame)
   }
 
-  // ---- mini game: 别被看见 — walk only while the eye sleeps ---------------------------------
+  // ---- mini game: Break the Seal ---------------------------------------------------------------
   const play = el.querySelector<HTMLElement>('.cth-play')!
   const say = el.querySelector<HTMLElement>('.cth-say')!
+  let sayCopy = () => ''
   const g = { on: false }
-  const stalk = createStalk(el.querySelector<HTMLCanvasElement>('.cth-game')!, sprites, {
+  const seal = createSeal(el.querySelector<HTMLCanvasElement>('.cth-game')!, sprites, {
     score: (n) => shell.score(n),
-    extra: (h) => shell.extra(h),
+    extra: (h) => shell.extra(h, true),
     end: (score, title, sub) => shell.end(score, title, sub, false),
     san(v) {
       if (v !== undefined) {
@@ -83,34 +86,50 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
       }
       return san
     },
-    say(t) {
-      say.textContent = t
-      say.dataset.tone = t.includes('别动') ? 'stop' : t.includes('眼皮') ? 'warn' : 'go'
+    say(copy, tone) {
+      sayCopy = copy
+      say.textContent = copy()
+      say.dataset.tone = tone
     },
   })
-  const gameFrame = (t: number) => stalk.frame(t)
+  const gameFrame = (t: number) => seal.frame(t)
 
-  const shell = new GameShell(el, 'cthulhu-stalk', '别被看见', {
+  const shell = new GameShell(el, 'cthulhu-seal', () => t('game.cthulhu'), {
     start() {
       play.hidden = false
       g.on = true
-      stalk.start()
+      seal.start()
     },
     stop() {
       g.on = false
-      stalk.stop()
+      seal.stop()
       play.hidden = true
       san = 100
       apply()
     },
   })
 
+  document.addEventListener('visibilitychange', () => {
+    cancelAnimationFrame(raf)
+    if (document.hidden) seal.pause()
+    else if (active) {
+      seal.resume()
+      raf = requestAnimationFrame(frame)
+    }
+  })
+
   apply()
+  onLocaleChange(() => {
+    src = text.dataset.src ?? ''
+    text.textContent = src
+    say.textContent = sayCopy()
+    apply()
+  })
 
   return {
     id: 'cthulhu',
     num: '05',
-    title: '克苏鲁',
+    title: () => t('world.cthulhu'),
     color: '#0d1410',
     transition: 'melt',
     ambience: 'cthulhu',
@@ -129,17 +148,20 @@ export function createCthulhu(el: HTMLElement, sprites: Sprite[]): Chapter {
       return true
     },
     enter(dir) {
-      san = dir === 1 ? 100 : 0
+      if (!shell.playing) san = dir === 1 ? 100 : 0
+      else document.body.classList.add('is-playing-game')
+      seal.resume()
       apply()
       active = true
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(frame)
+      if (!document.hidden) raf = requestAnimationFrame(frame)
     },
     leave() {
       active = false
       cancelAnimationFrame(raf)
       el.style.transform = ''
-      shell.quit()
+      seal.pause()
+      document.body.classList.remove('is-playing-game')
     },
   }
 }
