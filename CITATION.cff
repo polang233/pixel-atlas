@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use Pixel Atlas, please cite it as below, and credit the sprites' source dataset."
+title: "Pixel Atlas: millions of pixel-art resources, in one place"
+type: software
+authors:
+  - alias: polang233
+url: "https://pixelatlas.org"
+repository-code: "https://github.com/polang233/pixel-atlas"
+license: MPL-2.0
+date-released: 2026-11-11
+keywords:
+  - pixel art
+  - sprites
+  - game assets
+  - data visualization
+references:
+  - type: dataset
+    title: "pixel-art-atlas-1.4m"
+    authors:
+      - alias: Angais
+    url: "https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m"
+    license: CC0-1.0

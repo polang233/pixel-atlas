@@ -4,6 +4,14 @@
 
 # Pixel Atlas · 像素星图
 
+<p>
+  <a href="https://pixelatlas.org"><img alt="Website: pixelatlas.org" src="https://img.shields.io/badge/site-pixelatlas.org-ffcc4d?labelColor=07060c" /></a>
+  <a href="LICENSE"><img alt="Code licence: MPL-2.0" src="https://img.shields.io/badge/code-MPL--2.0-4c8bf5" /></a>
+  <a href="#licences"><img alt="Data licence: CC BY 4.0" src="https://img.shields.io/badge/data-CC%20BY%204.0-8a8a8a" /></a>
+  <a href="https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m"><img alt="Sprites: Angais/pixel-art-atlas-1.4m on Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20sprites-pixel--art--atlas--1.4m-ffd21e" /></a>
+  <a href="https://x.com/polang233"><img alt="X: @polang233" src="https://img.shields.io/badge/X-%40polang233-000000?logo=x" /></a>
+</p>
+
 **Millions of pixel-art resources, in one place.**
 
 It starts with every 16×16 sprite of [Angais/pixel-art-atlas-1.4m](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m) laid out on one zoomable map and sorted by colour, so you can fly from orbit down to a single sprite. Around it are themed worlds with small playable retro games and short pieces on pixel art: colour depth, palettes, squash and stretch.
@@ -41,6 +49,22 @@ The sprites were generated with Krea 2. CC0 does not override the Krea 2 Communi
 
 - Sprites: [Angais/pixel-art-atlas-1.4m](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m)
 - Pixel fonts: Fusion Pixel (OFL-1.1, see `public/fonts/OFL-fusion-pixel.txt`), Press Start 2P and Silkscreen (OFL-1.1, via Fontsource)
+
+## Citing
+
+If Pixel Atlas helps your work, please cite it. GitHub's "Cite this repository" button reads [`CITATION.cff`](CITATION.cff); the same in BibTeX:
+
+```bibtex
+@misc{pixelatlas2026,
+  title        = {Pixel Atlas: millions of pixel-art resources, in one place},
+  author       = {polang233},
+  year         = {2026},
+  howpublished = {\url{https://pixelatlas.org}},
+  note         = {Source code: \url{https://github.com/polang233/pixel-atlas}}
+}
+```
+
+Please also credit the sprites' source, [Angais/pixel-art-atlas-1.4m](https://huggingface.co/datasets/Angais/pixel-art-atlas-1.4m).
 
 ## Feedback
 
