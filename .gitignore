@@ -23,3 +23,6 @@ pipeline/.cache/
 
 # Local notes, previews and experiments
 .local/
+
+# Local Wrangler state
+.wrangler/
