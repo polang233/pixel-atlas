@@ -202,6 +202,11 @@
             <p class="ws-tool-desc"></p>
             <div class="ws-controls"></div>
             <p class="ws-stat pix"></p>
+            <div class="ws-apply-row">
+              <button data-i18n="workshop.apply" type="button" class="chip ws-apply">✓ 叠加到素材</button>
+              <button data-i18n="workshop.undo" type="button" class="chip ws-undo" disabled>↶ 撤销</button>
+            </div>
+            <p class="ws-chain pix dim" hidden></p>
             <p data-i18n="workshop.tray" class="dim pix ws-tray-label">换一张素材，或者用你自己的</p>
             <div class="ws-import-row">
               <button data-i18n="workshop.import" type="button" class="chip hot ws-import">＋ 导入图片</button>
@@ -209,7 +214,11 @@
             </div>
             <p data-i18n="workshop.importNote" class="ws-import-note pix dim">拖入或粘贴也行 · 自动缩成 16×16 · 只在本地处理，不上传</p>
             <div class="ws-tray"></div>
-            <button data-i18n="workshop.export" type="button" class="chip ws-export">下载 PNG</button>
+            <div class="ws-export">
+              <button data-i18n="workshop.export" type="button" class="chip ws-export-big">下载 PNG</button>
+              <button data-i18n="workshop.export1x" type="button" class="chip ws-export-1x">原尺寸</button>
+            </div>
+            <p class="ws-deeper pix dim"></p>
           </div>
         </section>
 

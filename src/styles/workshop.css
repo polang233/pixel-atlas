@@ -130,15 +130,31 @@
   cursor: ew-resize;
 }
 .ws-sun {
+  --sun: #fff6c8;
   position: absolute;
   width: 18px;
   height: 18px;
   translate: -50% -50%;
   pointer-events: none;
-  background: #fff6c8;
+  background: var(--sun);
   box-shadow:
-    0 0 0 3px #ffd84d,
-    0 0 24px 8px rgb(255 220 120 / 0.6);
+    0 0 0 3px color-mix(in srgb, var(--sun) 70%, #000),
+    0 0 24px 8px color-mix(in srgb, var(--sun) 60%, transparent);
+}
+/* pinned: four pixel corner brackets round the light, so it reads as held in place */
+.ws-sun.is-pinned::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  background:
+    linear-gradient(#fff 0 0) 0 0 / 8px 3px no-repeat,
+    linear-gradient(#fff 0 0) 0 0 / 3px 8px no-repeat,
+    linear-gradient(#fff 0 0) 100% 0 / 8px 3px no-repeat,
+    linear-gradient(#fff 0 0) 100% 0 / 3px 8px no-repeat,
+    linear-gradient(#fff 0 0) 0 100% / 8px 3px no-repeat,
+    linear-gradient(#fff 0 0) 0 100% / 3px 8px no-repeat,
+    linear-gradient(#fff 0 0) 100% 100% / 8px 3px no-repeat,
+    linear-gradient(#fff 0 0) 100% 100% / 3px 8px no-repeat;
 }
 .ws-sun[hidden] {
   display: none;
@@ -355,6 +371,84 @@
   color: #ffd48a;
   min-height: 21px;
 }
+/* light colours: swatch chips plus a colour picker dressed as one */
+.ws-lights .chip b {
+  font-weight: normal;
+}
+.ws-lights .sw {
+  border: 1px solid rgb(0 0 0 / 0.5);
+}
+.ws-light-own input {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 0.5);
+  background: none;
+  cursor: pointer;
+}
+.ws-light-own input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.ws-light-own input::-webkit-color-swatch {
+  border: 0;
+}
+.ws-light-own[aria-pressed='true'] {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold);
+}
+/* apply / undo: bake the current result in so the next tool works on it */
+.ws-apply-row,
+.ws-export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ws-apply-row .chip:disabled,
+.ws-export .chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.ws-apply:not(:disabled) {
+  color: #ffd48a;
+}
+.ch-workshop .ws-chain {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #bfb3d6;
+}
+/* the big canvas takes arrow keys */
+.ws-main:focus-visible {
+  outline: 3px solid #ffd48a;
+  outline-offset: 3px;
+}
+/* one real tool per workshop tool, at the foot of the panel */
+.ch-workshop .ws-deeper {
+  order: 4;
+  font-size: 12px;
+  line-height: 1.7;
+  border-top: 2px dashed #3a3350;
+  padding-top: 10px;
+}
+.ws-deeper a,
+.ws-to-toolbox {
+  color: #ffd48a;
+  text-decoration: none;
+}
+.ws-deeper a:hover,
+.ws-to-toolbox:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ws-to-toolbox {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
 .ch-workshop .ws-tray-label {
   font-size: 13px;
   line-height: 1.5;
@@ -455,7 +549,9 @@
   /* the controls come before the description here: they are what must not need scrolling */
   .ws-side > .ws-tool-name,
   .ws-side > .ws-controls,
-  .ws-side > .ws-stat {
+  .ws-side > .ws-stat,
+  .ws-side > .ws-apply-row,
+  .ws-side > .ws-chain {
     order: -1;
   }
 }
@@ -525,6 +621,23 @@
   }
   .ws-tool-name {
     font-size: 20px;
+  }
+  /* the import button and the tray come before the reading, so a new sprite is one tap away */
+  .ws-side > .ws-tool-desc {
+    order: 3;
+  }
+  .ws-side > .ws-import-note,
+  .ws-side > .ws-tray-label {
+    display: none;
+  }
+  .ws-side > .ws-tray {
+    order: 2;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 38px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    touch-action: pan-x;
   }
 }
 /* without container units the phone layout falls back to fixed sizes */

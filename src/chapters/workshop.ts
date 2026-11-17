@@ -5,7 +5,8 @@
 import gsap from 'gsap'
 import { sound } from '../audio'
 import { hueToward, lchToRgb, type RGB, rgbToLch } from '../color'
-import { onLocaleChange, t } from '../i18n'
+import { getLocale, type MessageKey, onLocaleChange, t } from '../i18n'
+import { zhLabel } from '../search-zh'
 import type { Sprite } from '../sprites'
 import type { Chapter } from '../types'
 import { reducedMotion } from '../types'
@@ -188,6 +189,33 @@ const VARIANTS = [
   },
 ] as { name: string; h?: number; c?: number; l?: number }[]
 
+/** each tool points at one real tool that takes the idea further */
+const DEEPER: Record<ToolId, { name: string; url: string; note: MessageKey }> = {
+  depth: { name: 'Lospec Palette List', url: 'https://lospec.com/palette-list', note: 'workshop.more.depth' },
+  light: { name: 'Pixel Art Lighter', url: 'https://moonfell-rpg.com/pixel-lighter', note: 'workshop.more.light' },
+  outline: { name: 'Pixelorama', url: 'https://pixelorama.org', note: 'workshop.more.outline' },
+  swap: { name: 'Aseprite', url: 'https://www.aseprite.org', note: 'workshop.more.swap' },
+  scale: { name: 'unfake.js', url: 'https://github.com/jenissimo/unfake.js', note: 'workshop.more.scale' },
+  rotate: { name: 'Aseprite', url: 'https://www.aseprite.org', note: 'workshop.more.rotate' },
+  juice: { name: 'pixelfx', url: 'https://github.com/patch-gg/pixelfx', note: 'workshop.more.juice' },
+}
+/** a light: the hue lit rungs lean to, the hue shadows lean to, how much colour it casts, its own colour */
+type Light = { hi: number; sh: number; tint: number; rgb: RGB }
+const LIGHTS: (Light & { key: MessageKey })[] = [
+  { key: 'workshop.light.day', hi: 82, sh: 272, tint: 0, rgb: [255, 246, 200] },
+  { key: 'workshop.light.candle', hi: 58, sh: 300, tint: 0.07, rgb: [255, 170, 80] },
+  { key: 'workshop.light.moon', hi: 235, sh: 265, tint: 0.045, rgb: [170, 200, 255] },
+  { key: 'workshop.light.neon', hi: 340, sh: 200, tint: 0.09, rgb: [255, 80, 210] },
+]
+/** a picked colour as a light: its hue lights, the opposite hue shades */
+function lightFrom(rgb: RGB): Light {
+  const [, C, h] = rgbToLch(rgb)
+  return C < 0.03 ? { ...LIGHTS[0], rgb } : { hi: h, sh: (h + 180) % 360, tint: Math.min(0.1, C * 0.45), rgb }
+}
+
+/** tools whose result is the same 20×20 buffer, so it can be baked in and stacked */
+const STACKABLE: ToolId[] = ['depth', 'light', 'outline', 'swap']
+
 const pack = (b: Buf, i: number) => (b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]
 
 function scale2x(src: Buf, n: number): Buf {
@@ -236,6 +264,10 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   const trayEl = $('.ws-tray')
   const toolNav = $('.ws-tools')
   const labelEl = $('.ws-label')
+  const applyBtn = $<HTMLButtonElement>('.ws-apply')
+  const undoBtn = $<HTMLButtonElement>('.ws-undo')
+  const chainEl = $('.ws-chain')
+  const moreEl = $('.ws-deeper')
   // The side panel is the only part of the workshop that scrolls. While more of it sits below
   // the fold the chapter is flagged, and CSS draws a cue over the panel's foot.
   const side = $('.ws-side')
@@ -282,7 +314,16 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     lz: 7,
     hueShift: true,
     smooth: false,
-    lightAuto: true,
+    /** the light circles on its own while nothing else holds it */
+    lightOrbit: true,
+    /** clicked into place: stays put until clicked again */
+    lightPinned: false,
+    /** the pointer is over the canvas and the light follows it */
+    lightHover: false,
+    lightAngle: 0,
+    /** index into LIGHTS, or -1 for the picked colour */
+    lightColor: 0,
+    lightCustom: [120, 220, 255] as RGB,
     outline: 'selout',
     shadow: false,
     hue: 0,
@@ -297,25 +338,79 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     let data: ImageData
     if (src instanceof ImageData) data = src
     else data = src.getContext('2d')!.getImageData(0, 0, 16, 16)
-    base = new Uint8ClampedArray(N * N * 4)
-    const colors = new Set<number>()
+    const fresh = new Uint8ClampedArray(N * N * 4)
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         const s = (y * 16 + x) * 4
         const d = ((y + PAD) * N + x + PAD) * 4
         if (data.data[s + 3] < 128) continue
-        base[d] = data.data[s]
-        base[d + 1] = data.data[s + 1]
-        base[d + 2] = data.data[s + 2]
-        base[d + 3] = 255
-        colors.add(pack(base, d))
+        fresh[d] = data.data[s]
+        fresh[d + 1] = data.data[s + 1]
+        fresh[d + 2] = data.data[s + 2]
+        fresh[d + 3] = 255
       }
-    baseColors = colors.size
     labelCopy = label
     labelEl.textContent = label()
+    history = []
+    setBase(fresh)
+  }
+
+  // ---- stacking: bake the current result in, so the next tool works on it --------------------
+  let history: { buf: Buf; step: () => string }[] = []
+  function setBase(buf: Buf) {
+    base = buf
+    baseColors = colorCount(base)
     computeHeight()
-    render()
+    if (tool === 'rotate') rotBig = null
     if (tool === 'swap') renderVariants()
+    else if (tool === 'scale') renderScale()
+    render()
+    renderChain()
+  }
+  /** what the current tool is set to, in a few words, for the chain of applied steps */
+  function stepName(): () => string {
+    const id = tool
+    const name = TOOLS.find((x) => x.id === id)!
+    if (id === 'depth') {
+      const d = DEPTHS[st.depth]
+      const dither = st.dither
+      return () => `${d.key}${dither ? ` + ${t('workshop.depth.dither')}` : ''}`
+    }
+    if (id === 'outline') {
+      const key = `workshop.outline.${st.outline === 'selout' ? 'selective' : st.outline === 'color' ? 'colour' : st.outline}` as MessageKey
+      return () => t(key as 'workshop.outline.none')
+    }
+    if (id === 'swap') {
+      const v = VARIANTS[st.variant]
+      const hue = Math.round(st.hue)
+      return () => (hue ? `${v.name} ${hue > 0 ? '+' : ''}${hue}°` : v.name)
+    }
+    return () => name.name
+  }
+  function apply() {
+    if (!STACKABLE.includes(tool)) return
+    history.push({ buf: base, step: stepName() })
+    sound.sparkle()
+    // a baked step starts the tool over from its neutral setting, so it is not applied twice by eye
+    if (tool === 'swap') {
+      st.variant = 0
+      st.hue = 0
+    }
+    setBase(new Uint8ClampedArray(out))
+  }
+  function undo() {
+    const last = history.pop()
+    if (!last) return
+    sound.pop()
+    setBase(last.buf)
+  }
+  function renderChain() {
+    const stackable = STACKABLE.includes(tool)
+    applyBtn.disabled = !stackable
+    applyBtn.title = stackable ? '' : t('workshop.apply.cannot')
+    undoBtn.disabled = !history.length
+    chainEl.hidden = !history.length
+    chainEl.textContent = history.length ? t('workshop.apply.chain', { steps: history.map((h) => h.step()).join(' → ') }) : ''
   }
 
   function computeHeight() {
@@ -400,6 +495,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     }
   }
 
+  const sideOf = (b: Buf) => Math.round(Math.sqrt(b.length / 4))
   const colorCount = (b: Buf) => {
     const s = new Set<number>()
     for (let i = 0; i < b.length; i += 4) if (b[i + 3]) s.add(pack(b, i))
@@ -460,10 +556,15 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   }
 
   // ---- light ---------------------------------------------------------------------------
+  const currentLight = (): Light => (st.lightColor < 0 ? lightFrom(st.lightCustom) : LIGHTS[st.lightColor])
+  const orbiting = () => st.lightOrbit && !st.lightPinned && !st.lightHover && !reducedMotion
   const rampCache = new Map<string, RGB>()
-  function ramp(rgb: RGB, step: number, shift: boolean): RGB {
+  /** One colour pushed `step` rungs up or down its ramp. With hue shifting on, lit rungs lean toward
+   *  the light's hue (and pick up some of its colour when the light is tinted) and shadows toward
+   *  the light's shadow hue: cool under daylight, cyan under neon, and so on. */
+  function ramp(rgb: RGB, step: number, shift: boolean, light: Light): RGB {
     if (step === 0) return rgb
-    const key = `${rgb.join(',')},${step},${shift}`
+    const key = `${rgb.join(',')},${step},${shift},${light.hi},${light.sh},${light.tint}`
     const hit = rampCache.get(key)
     if (hit) return hit
     const [L, C, h] = rgbToLch(rgb)
@@ -472,11 +573,16 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     let C2 = step === 3 ? C * 0.45 : C * (1 - 0.07 * a)
     let h2 = h
     if (shift) {
-      const target = step < 0 ? 272 : 82
+      const lit = step > 0
+      const target = lit ? light.hi : light.sh
+      const pull = lit ? 9 + light.tint * 260 : 9 + light.tint * 80
       if (C < 0.025) {
-        C2 = 0.012 * a
+        C2 = (0.012 + (lit ? light.tint * 0.6 : light.tint * 0.25)) * a
         h2 = target
-      } else h2 = hueToward(h, target, 9 * a)
+      } else {
+        h2 = hueToward(h, target, pull * a)
+        if (lit) C2 = Math.max(C2, light.tint * a * 0.7)
+      }
     }
     const res = lchToRgb([L2, C2, h2])
     rampCache.set(key, res)
@@ -486,6 +592,7 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
 
   let prevSteps = new Int8Array(N * N)
   function renderLight() {
+    const light = currentLight()
     const res = new Uint8ClampedArray(base)
     const steps = new Int8Array(N * N)
     for (let y = 0; y < N; y++)
@@ -510,14 +617,16 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         const s = 0.28 + diff * 0.95
         const rgb: RGB = [base[o], base[o + 1], base[o + 2]]
         if (st.smooth) {
-          res[o] = rgb[0] * s + spec * 200
-          res[o + 1] = rgb[1] * s + spec * 200
-          res[o + 2] = rgb[2] * s + spec * 190
+          // smooth shading is plain multiplication by the light's colour, with a highlight of the same colour
+          const lc = light.rgb
+          res[o] = (rgb[0] * s * (lc[0] + 255)) / 510 + spec * lc[0] * 0.8
+          res[o + 1] = (rgb[1] * s * (lc[1] + 255)) / 510 + spec * lc[1] * 0.8
+          res[o + 2] = (rgb[2] * s * (lc[2] + 255)) / 510 + spec * lc[2] * 0.8
         } else {
           let step = Math.max(-2, Math.min(2, Math.round((s - 0.8) * 4.2)))
           if (spec > 0.5) step = 3
           steps[i] = step
-          const c = ramp(rgb, step, st.hueShift)
+          const c = ramp(rgb, step, st.hueShift, light)
           res[o] = c[0]
           res[o + 1] = c[1]
           res[o + 2] = c[2]
@@ -526,8 +635,10 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     let changed = 0
     for (let i = 0; i < N * N; i++) if (steps[i] !== prevSteps[i]) changed++
     prevSteps = steps
-    if (changed && active && !st.lightAuto) sound.tick(900 + Math.atan2(st.ly - 10, st.lx - 10) * 200 + 400, Math.min(0.02, 0.004 + changed * 0.0012))
-    showStat(() => t('workshop.light.stat', { n: colorCount(res), base: baseColors }))
+    if (changed && active && !orbiting()) sound.tick(900 + Math.atan2(st.ly - 10, st.lx - 10) * 200 + 400, Math.min(0.02, 0.004 + changed * 0.0012))
+    const n = colorCount(res)
+    const pinned = st.lightPinned
+    showStat(() => `${t('workshop.light.stat', { n, base: baseColors })}${pinned ? ` · ${t('workshop.light.pinned')}` : ''}`)
     return res
   }
 
@@ -666,11 +777,15 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   }
 
   // ---- scale -----------------------------------------------------------------------------
+  /** Scale2x applied twice, cached until the base changes */
+  let scaled: Buf | null = null
   function renderScale() {
+    scaled = scale2x(scale2x(base, N), N * 2)
+    const big = scaled
     const panels: [() => string, (ctx: CanvasRenderingContext2D) => void][] = [
       [() => t('workshop.scale.nearest'), (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false })],
       [() => t('workshop.scale.bilinear'), (ctx) => blit(ctx, base, N, N * 4 * 2, { checker: false, smooth: true })],
-      [() => t('workshop.scale.algorithm'), (ctx) => blit(ctx, scale2x(scale2x(base, N), N * 2), N * 4, N * 4 * 2, { checker: false })],
+      [() => t('workshop.scale.algorithm'), (ctx) => blit(ctx, big, N * 4, N * 4 * 2, { checker: false })],
     ]
     extra.replaceChildren(
       ...panels.map(([label, draw]) => {
@@ -682,7 +797,8 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         return f
       }),
     )
-    showStat(() => t('workshop.scale.stat', { n: colorCount(scale2x(scale2x(base, N), N * 2)) }))
+    const n = colorCount(big)
+    showStat(() => t('workshop.scale.stat', { n }))
   }
 
   // ---- rotate ---------------------------------------------------------------------------
@@ -728,9 +844,11 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       setupRotate()
     }
     const a = st.angle
+    const smart = rotate(rotBig!, N * 8, 8, a)
     blit(rotPanels[0], rotate(base, N, 1, a), R, R * 9, { checker: false })
-    blit(rotPanels[1], rotate(rotBig!, N * 8, 8, a), R, R * 9, { checker: false })
+    blit(rotPanels[1], smart, R, R * 9, { checker: false })
     showStat(() => t('workshop.rotate.stat', { n: Math.round(((((a * 180) / Math.PI) % 360) + 360) % 360) }))
+    return smart
   }
 
   // ---- juice ------------------------------------------------------------------------------
@@ -910,6 +1028,60 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     return l
   }
 
+  /** the light's colour: four presets and a picker */
+  function lightColours() {
+    const wrap = document.createElement('div')
+    wrap.className = 'ws-radios ws-lights'
+    const mark = () =>
+      wrap.querySelectorAll<HTMLElement>('[data-light]').forEach((x) => {
+        x.setAttribute('aria-pressed', String(Number(x.dataset.light) === st.lightColor))
+      })
+    const pick = (k: number) => {
+      st.lightColor = k
+      sound.pop()
+      mark()
+      render()
+    }
+    LIGHTS.forEach((l, k) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'chip'
+      b.dataset.light = String(k)
+      const sw = document.createElement('i')
+      sw.className = 'sw'
+      sw.style.background = `rgb(${l.rgb.join(',')})`
+      b.append(
+        sw,
+        bindText(document.createElement('b'), () => t(l.key)),
+      )
+      b.addEventListener('click', () => pick(k))
+      wrap.append(b)
+    })
+    // the picker sits inside a chip-shaped label, so it reads as the fifth option
+    const own = document.createElement('label')
+    own.className = 'chip ws-light-own'
+    own.dataset.light = '-1'
+    const input = document.createElement('input')
+    input.type = 'color'
+    input.value = `#${st.lightCustom.map((v) => v.toString(16).padStart(2, '0')).join('')}`
+    input.addEventListener('input', () => {
+      const h = input.value
+      st.lightCustom = [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]
+      if (st.lightColor !== -1) pick(-1)
+      else render()
+    })
+    input.addEventListener('click', () => {
+      if (st.lightColor !== -1) pick(-1)
+    })
+    own.append(
+      input,
+      bindText(document.createElement('b'), () => t('workshop.light.own')),
+    )
+    wrap.append(own)
+    mark()
+    return wrap
+  }
+
   function setTool(id: ToolId) {
     controlText.clear()
     tool = id
@@ -946,6 +1118,14 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
         ),
       )
     } else if (id === 'light') {
+      c.push(lightColours())
+      c.push(
+        checkbox(
+          () => t('workshop.light.orbit'),
+          () => st.lightOrbit,
+          (v) => (st.lightOrbit = v),
+        ),
+      )
       c.push(
         checkbox(
           () => t('workshop.light.quantise'),
@@ -1035,7 +1215,32 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
       c.push(wrap)
     }
     controls.replaceChildren(...c)
+    main.setAttribute('aria-label', t(`workshop.keys.${id}` as 'workshop.keys.depth'))
+    renderDeeper()
+    renderChain()
     render()
+  }
+
+  function renderDeeper() {
+    const d = DEEPER[tool]
+    const a = document.createElement('a')
+    a.href = d.url
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = `${d.name} ↗`
+    a.addEventListener('pointerenter', () => sound.tick(1800, 0.01))
+    const parts: Node[] = [document.createTextNode(`${t('workshop.more.lead')} `), a, document.createTextNode(` · ${t(d.note)}`)]
+    // the toolbox layer collects the rest; it listens for this and opens on the matching card
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'ws-to-toolbox'
+    b.textContent = t('workshop.more.toolbox')
+    b.addEventListener('click', () => {
+      sound.click()
+      el.dispatchEvent(new CustomEvent('workshop:toolbox', { bubbles: true, detail: { url: d.url } }))
+    })
+    parts.push(document.createTextNode(' '), b)
+    moreEl.replaceChildren(...parts)
   }
 
   function render() {
@@ -1058,20 +1263,22 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
             : VARIANTS[st.variant].name,
         )
         break
+      // the big canvas shows the algorithm's result (and is what gets downloaded); the small panels compare
       case 'scale':
-        out = base
+        out = scaled ??= scale2x(scale2x(base, N), N * 2)
         break
       case 'rotate':
-        renderRotate()
-        out = base
+        out = renderRotate()
         break
       case 'juice':
         out = renderJuice(now)
         break
     }
-    blit(mctx, out, N, N * SCALE, { grid: true })
+    const n = sideOf(out)
+    blit(mctx, out, n, N * SCALE, { grid: n === N })
     sun.hidden = tool !== 'light'
     if (tool === 'light') {
+      sun.style.setProperty('--sun', `rgb(${currentLight().rgb.join(',')})`)
       sun.style.left = `${(st.lx / N) * 100}%`
       sun.style.top = `${(st.ly / N) * 100}%`
     }
@@ -1090,8 +1297,9 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
   }
   main.addEventListener('pointermove', (e) => {
     const p = toBuf(e)
-    if (tool === 'light') {
-      st.lightAuto = false
+    // the light follows the mouse, or a finger while it is down, unless it has been pinned
+    if (tool === 'light' && !st.lightPinned && (e.pointerType === 'mouse' || dragX !== null)) {
+      st.lightHover = true
       st.lx = p.x
       st.ly = p.y
     }
@@ -1110,17 +1318,79 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     if (tool !== 'juice') render()
   })
   main.addEventListener('pointerleave', () => {
-    if (tool === 'light') st.lightAuto = true
+    st.lightHover = false
   })
+  /** pin or release the light where the pointer is */
+  function pinLight(on: boolean, p?: { x: number; y: number }) {
+    st.lightPinned = on
+    if (p) {
+      st.lx = p.x
+      st.ly = p.y
+    }
+    sun.classList.toggle('is-pinned', on)
+    if (on) sound.tone(660, 0.08, { vol: 0.04 })
+    else sound.pop()
+    render()
+  }
+  let downAt: { x: number; y: number; touch: boolean } | null = null
   main.addEventListener('pointerdown', (e) => {
     main.setPointerCapture(e.pointerId)
     dragX = e.clientX
+    if (tool === 'light') {
+      const p = toBuf(e)
+      const touch = e.pointerType !== 'mouse'
+      downAt = { x: e.clientX, y: e.clientY, touch }
+      // a mouse click toggles the pin; a finger drags the light and pins it where it is let go
+      if (!touch) pinLight(!st.lightPinned, p)
+      else if (!st.lightPinned) {
+        st.lightHover = true
+        st.lx = p.x
+        st.ly = p.y
+        render()
+      }
+    }
     if (tool === 'juice') {
       const p = toBuf(e)
       hit(p.px, p.py)
     }
   })
-  const up = () => (dragX = null)
+  // the same moves from the keyboard: arrows move the light, turn the hue or the sprite, Enter hits
+  main.tabIndex = 0
+  main.addEventListener('keydown', (e) => {
+    const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]
+    if (tool === 'light' && e.key === 'Enter') {
+      pinLight(!st.lightPinned)
+      return e.preventDefault()
+    } else if (tool === 'light' && arrow) {
+      if (!st.lightPinned) pinLight(true)
+      st.lx = Math.max(0, Math.min(N, st.lx + arrow[0]))
+      st.ly = Math.max(0, Math.min(N, st.ly + arrow[1]))
+    } else if (tool === 'swap' && arrow && arrow[0]) {
+      st.hue = ((((st.hue + arrow[0] * 15 + 180) % 360) + 360) % 360) - 180
+      sound.tick(800 + ((st.hue + 180) / 360) * 1600, 0.012)
+    } else if (tool === 'rotate' && arrow && arrow[0]) {
+      st.angle += arrow[0] * 0.1
+      st.rotAuto = false
+      sound.tick(1300, 0.01)
+    } else if (tool === 'juice' && (e.key === 'Enter' || e.key === ' ')) {
+      if (!e.repeat) hit((N * SCALE) / 2, (N * SCALE) / 2)
+    } else return
+    e.preventDefault()
+    if (tool !== 'juice') render()
+  })
+  applyBtn.addEventListener('click', apply)
+  undoBtn.addEventListener('click', undo)
+  const up = (e: PointerEvent) => {
+    dragX = null
+    if (tool === 'light' && downAt?.touch) {
+      st.lightHover = false
+      const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 8
+      // a tap on a pinned light releases it; anything else leaves it pinned where the finger was
+      if (st.lightPinned && !moved) pinLight(false)
+      else if (e.type === 'pointerup') pinLight(true)
+    }
+    downAt = null
+  }
   main.addEventListener('pointerup', up)
   main.addEventListener('pointercancel', up)
 
@@ -1134,17 +1404,23 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     if ((e.target as HTMLElement).closest('[data-tool]')) sound.tick(2000, 0.01)
   })
 
+  // captions are English; in Chinese the subject gets a Chinese name in front when we know one
+  const spriteLabel = (s: Sprite) => {
+    const zh = getLocale() === 'zh-CN' ? zhLabel(s.subject) : ''
+    return zh ? `${zh} · ${s.caption}` : s.caption
+  }
   type TrayItem = { url: string; label: () => string; src: HTMLCanvasElement | ImageData }
   const tray = sprites.slice(0, 14)
   /** sprites brought in from outside the preset strip: from the star map, or the visitor's own files */
   const customs: TrayItem[] = []
   function renderTray() {
-    const items: TrayItem[] = [...customs, ...tray.map((s) => ({ url: s.url, label: () => s.caption, src: s.data }))]
+    const items: TrayItem[] = [...customs, ...tray.map((s) => ({ url: s.url, label: () => spriteLabel(s), src: s.data }))]
     trayEl.replaceChildren(
       ...items.map((it, i) => {
         const b = document.createElement('button')
         b.type = 'button'
         b.title = it.label()
+        b.setAttribute('aria-label', it.label())
         if (i < customs.length) b.className = 'is-own'
         b.innerHTML = `<img src="${it.url}" alt="">`
         b.addEventListener('click', () => {
@@ -1291,36 +1567,68 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     importImage(f, () => t('workshop.import.clipboard'))
   })
 
-  el.querySelector('.ws-export')!.addEventListener('click', () => {
+  /** Download what the big canvas shows: at true size (the padding trimmed when nothing was drawn
+   *  into it, so a plain sprite comes back as 16×16), or blown up to about 320 px for sharing. */
+  function exportPng(actual: boolean) {
     sound.click()
-    const n = Math.round(Math.sqrt(out.length / 4)) || N
+    let buf = out
+    let n = sideOf(buf)
+    const pad = n % N === 0 ? (PAD * n) / N : 0
+    if (actual && pad) {
+      let used = false
+      for (let y = 0; y < n && !used; y++)
+        for (let x = 0; x < n; x++)
+          if ((x < pad || y < pad || x >= n - pad || y >= n - pad) && buf[(y * n + x) * 4 + 3]) {
+            used = true
+            break
+          }
+      if (!used) {
+        const m = n - pad * 2
+        const crop = new Uint8ClampedArray(m * m * 4)
+        for (let y = 0; y < m; y++) crop.set(buf.subarray(((y + pad) * n + pad) * 4, ((y + pad) * n + pad + m) * 4), y * m * 4)
+        buf = crop
+        n = m
+      }
+    }
+    const k = actual ? 1 : Math.max(4, Math.round((N * SCALE) / n))
     const c = document.createElement('canvas')
-    blit(c.getContext('2d')!, out, n, n * 16, { checker: false })
+    blit(c.getContext('2d')!, buf, n, n * k, { checker: false })
+    // named now: the blob arrives later, maybe after the visitor has switched tools
+    const name = `pixel-atlas-workshop-${tool}-${actual ? `${n}px` : `x${k}`}.png`
     c.toBlob((blob) => {
       if (!blob) return
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `pixel-atlas-workshop-${tool}.png`
+      a.download = name
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 2000)
     })
-  })
+  }
+  el.querySelector('.ws-export-big')!.addEventListener('click', () => exportPng(false))
+  el.querySelector('.ws-export-1x')!.addEventListener('click', () => exportPng(true))
 
+  let lastFrame = performance.now()
+  let wasOrbiting = false
   function loop(now: number) {
-    if (tool === 'light' && st.lightAuto && !reducedMotion) {
-      const t = now / 1000
-      st.lx = N / 2 + Math.cos(t * 0.8) * 9
-      st.ly = N / 2 + Math.sin(t * 0.8) * 7
+    if (tool === 'light' && orbiting()) {
+      // carry on from wherever the light was left, rather than jumping to a clock position
+      const dt = Math.min(0.05, (now - lastFrame) / 1000)
+      if (!wasOrbiting) st.lightAngle = Math.atan2((st.ly - N / 2) / 7, (st.lx - N / 2) / 9)
+      st.lightAngle += dt * 0.8
+      st.lx = N / 2 + Math.cos(st.lightAngle) * 9
+      st.ly = N / 2 + Math.sin(st.lightAngle) * 7
       render()
     } else if (tool === 'rotate' && st.rotAuto && !reducedMotion) {
       st.angle = Math.sin(now / 1400) * 0.9
       render()
     } else if (tool === 'juice') render()
+    wasOrbiting = tool === 'light' && orbiting()
+    lastFrame = now
     if (active) raf = requestAnimationFrame(loop)
   }
 
   const first = sprites.find((s) => /apple|orb/.test(s.subject)) ?? sprites[0]
-  load(first.data, () => first.caption)
+  load(first.data, () => spriteLabel(first))
   setTool('depth')
 
   onLocaleChange(() => {
@@ -1334,9 +1642,13 @@ export function createWorkshop(el: HTMLElement, sprites: Sprite[]): Workshop {
     labelEl.textContent = labelCopy()
     stat.textContent = statCopy()
     importNote.textContent = noteCopy()
-    const items = [...customs, ...tray.map((sprite) => ({ label: () => sprite.caption }))]
+    renderDeeper()
+    renderChain()
+    main.setAttribute('aria-label', t(`workshop.keys.${tool}` as 'workshop.keys.depth'))
+    const items = [...customs, ...tray.map((sprite) => ({ label: () => spriteLabel(sprite) }))]
     trayEl.querySelectorAll('button').forEach((button, i) => {
       button.title = items[i].label()
+      button.setAttribute('aria-label', items[i].label())
     })
   })
 
