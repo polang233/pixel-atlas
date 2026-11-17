@@ -136,7 +136,7 @@
     linear-gradient(#000, #000) left / var(--co-line) 100% no-repeat,
     repeating-conic-gradient(#000 0 25%, transparent 0 50%) left var(--co-line) top 0 / 4px 4px repeat-y,
     linear-gradient(rgb(255 212 138 / 0.08), rgb(255 212 138 / 0.08)),
-    #221c30;
+    #2a2119;
 }
 .co-edge[data-layer-go='bench'] {
   --co-from: -100%;
@@ -206,7 +206,7 @@
     background:
       linear-gradient(#000, #000) left / var(--co-line) 100% no-repeat,
       linear-gradient(rgb(255 212 138 / 0.08), rgb(255 212 138 / 0.08)),
-      #221c30;
+      #2a2119;
   }
   .co-edge[data-layer-go='bench'] {
     background:

@@ -27,9 +27,9 @@ type Bind = (update: () => void) => void
 
 /** card colours by category: the main one, and a lighter one for identicon highlights */
 const KIND: Record<ToolCategory, [string, string]> = {
-  agent: ['#ff7a90', '#ffd3da'],
-  tools: ['#c9a7ff', '#efe4ff'],
-  assets: ['#6fd3ff', '#d6f3ff'],
+  agent: ['#ffa86b', '#ffe2c8'],
+  tools: ['#ffd48a', '#fff0c8'],
+  assets: ['#efe6d2', '#fffaf0'],
 }
 
 function h<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
@@ -986,7 +986,7 @@ export function createToolbox(el: HTMLElement, sprites: Sprite[], page: (delta: 
     id: 'toolbox',
     num: '03',
     title: () => t('nav.toolbox'),
-    color: '#1b1626',
+    color: '#1e1812',
     transition: 'iris',
     el,
     consume: scrollBy,

@@ -5,16 +5,16 @@
  *   wide   (> 1100px)   featured: the snap demo beside two stacked cards; lists three across
  *   mid    (≤ 1100px)   featured: the snap demo on its own row, the other two below it
  *   phone  (portrait ≤ 820px, or under 640px wide)   everything in one column
- * Each category has a colour, --tb-kind, that cards, headings and jump buttons pick up.
+ * Each category has a shade of the workbench's gold, --tb-kind, that cards, headings and jump buttons pick up.
  */
 .ch-toolbox {
-  /* the workbench's own colours (workshop.css), so both sheets read as one room */
-  --tb-bg: #1b1626;
-  --tb-card: #221c30;
-  --tb-well: #14111d;
-  --tb-line: #4a4160;
-  --tb-text: #d8d0e6;
-  --tb-kind: var(--gold);
+  /* the workbench's gold on a warm brown, so the toolbox reads as the other sheet of the same room */
+  --tb-bg: #1e1812;
+  --tb-card: #2a2119;
+  --tb-well: #15100b;
+  --tb-line: #5e4b36;
+  --tb-text: #ecdfc8;
+  --tb-kind: #ffd48a;
   /* a pegboard: one 2px hole every 16px */
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect x='7' y='7' width='2' height='2' fill='%23fff' fill-opacity='.07'/%3E%3C/svg%3E")
@@ -24,17 +24,17 @@
 .ch-toolbox [data-cat='agent'],
 .ch-toolbox [data-kind='agent'],
 .ch-toolbox [data-jump='agent'] {
-  --tb-kind: #ff7a90;
+  --tb-kind: #ffa86b;
 }
 .ch-toolbox [data-cat='tools'],
 .ch-toolbox [data-kind='tools'],
 .ch-toolbox [data-jump='tools'] {
-  --tb-kind: #c9a7ff;
+  --tb-kind: #ffd48a;
 }
 .ch-toolbox [data-cat='assets'],
 .ch-toolbox [data-kind='assets'],
 .ch-toolbox [data-jump='assets'] {
-  --tb-kind: #6fd3ff;
+  --tb-kind: #efe6d2;
 }
 .ch-toolbox p {
   max-width: none;
@@ -55,7 +55,7 @@
   width: 12px;
 }
 .tb-scroll::-webkit-scrollbar-track {
-  background: repeating-conic-gradient(#3a3350 0 25%, transparent 0 50%) 0 0 / 4px 4px;
+  background: repeating-conic-gradient(#4c3d2c 0 25%, transparent 0 50%) 0 0 / 4px 4px;
 }
 .tb-scroll::-webkit-scrollbar-thumb {
   background: #ffd48a;
@@ -66,7 +66,7 @@
 @supports not selector(::-webkit-scrollbar) {
   .tb-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #ffd48a #2c2540;
+    scrollbar-color: #ffd48a #3a2e21;
   }
 }
 /* "more below": a dithered fade over the foot of the panel, shown by toolbox.ts until the end is reached */
@@ -493,7 +493,7 @@
   aspect-ratio: 1;
   overflow: hidden;
   /* the checks show what is transparent */
-  background: repeating-conic-gradient(#1a1724 0 25%, #14121c 0 50%) 0 0 / 16px 16px;
+  background: repeating-conic-gradient(#241c14 0 25%, #1a140e 0 50%) 0 0 / 16px 16px;
   border: 3px solid var(--paper);
   box-shadow: 6px 6px 0 #000;
 }
@@ -750,7 +750,7 @@
   border-color: var(--paper);
 }
 .tb-frame.is-broken i {
-  background: #6a6080;
+  background: #7d6850;
 }
 .tb-frame.is-checking {
   border-color: var(--gold);
@@ -769,7 +769,7 @@
   flex: none;
   width: 72px;
   height: 72px;
-  background: repeating-conic-gradient(#1a1724 0 25%, #14121c 0 50%) 0 0 / 12px 12px;
+  background: repeating-conic-gradient(#241c14 0 25%, #1a140e 0 50%) 0 0 / 12px 12px;
   border: 2px solid var(--paper);
 }
 @keyframes tb-reject {
