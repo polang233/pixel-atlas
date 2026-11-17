@@ -1,0 +1,244 @@
+/* ===== CO-CREATE: one chapter, two stacked sheets =====
+ * The workshop chapter holds two full-size sheets: the workbench (.ch-workshop) and the toolbox
+ * (.ch-toolbox). One is in front. The other shows as an edge along the side it lives on, the
+ * workbench on the left and the toolbox on the right. workshop-layers.ts swaps them: both sheets
+ * shrink to cards on the desk, the back one slides out, goes over the top and lands.
+ */
+.ch-cocreate {
+  --co-bench: #ffd48a;
+  --co-toolbox: #ffd48a;
+  --co-edge: 22px;
+  --co-line: 3px;
+  --co-cast: 4px;
+  /* the desk under the sheets, seen only during a swap */
+  background: repeating-conic-gradient(#15121f 0 25%, #0b0a10 0 50%) 0 0 / 16px 16px;
+}
+.co-sheet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+  visibility: hidden;
+}
+.ch-cocreate[data-layer='bench'] > [data-sheet='bench'],
+.ch-cocreate[data-layer='toolbox'] > [data-sheet='toolbox'] {
+  z-index: 2;
+  visibility: inherit;
+}
+
+/* ---------- the swap ---------- */
+.ch-cocreate.is-swapping > .co-sheet {
+  visibility: inherit;
+  will-change: transform;
+  /* off the desk they are cards: a hard edge and a hard shadow */
+  box-shadow:
+    0 0 0 3px #000,
+    10px 10px 0 3px rgb(0 0 0 / 0.55);
+}
+.ch-cocreate.is-swapping > .co-sheet.is-lifted {
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 0 6px var(--paper),
+    18px 18px 0 6px rgb(0 0 0 / 0.6);
+}
+/* A sheet going to the back is dimmed by ordered dither, one level per step. The cells are 8px:
+   at the resting scale of 0.875 they come out as whole 7px blocks. */
+.co-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: none;
+  pointer-events: none;
+}
+.co-shade[data-dim='1'] {
+  display: block;
+  background: conic-gradient(#07060c 25%, transparent 0) 0 0 / 16px 16px;
+}
+.co-shade[data-dim='2'] {
+  display: block;
+  background: repeating-conic-gradient(#07060c 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+}
+.co-shade[data-dim='3'] {
+  display: block;
+  background: conic-gradient(transparent 25%, #07060c 0) 0 0 / 16px 16px;
+}
+
+/* ---------- the switch in each sheet's header ---------- */
+.co-switch {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  background: rgb(7 6 12 / 0.6);
+  border: 2px solid rgb(255 255 255 / 0.16);
+}
+.co-switch button {
+  font-family: var(--pixel);
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--co-ink);
+  background: none;
+  border: 0;
+  transition:
+    background 0.1s steps(2),
+    color 0.1s steps(2);
+}
+.co-switch [data-layer-go='bench'],
+.co-edge[data-layer-go='bench'] {
+  --co-ink: var(--co-bench);
+}
+.co-switch [data-layer-go='toolbox'],
+.co-edge[data-layer-go='toolbox'] {
+  --co-ink: var(--co-toolbox);
+}
+.co-switch button:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.co-switch button[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--co-ink);
+  cursor: default;
+}
+
+/* ---------- the edge of the sheet behind ---------- */
+.co-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: var(--co-edge);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  /* the label starts clear of the top bar */
+  padding: 78px 0 0;
+  cursor: pointer;
+  font-family: var(--pixel);
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  color: var(--co-ink);
+  border: 0;
+  transition: width 0.1s steps(2);
+}
+/* from the front sheet outwards: its hard edge, the shadow it casts in dither, then the sheet behind,
+   tinted with its own colour so it reads as a different sheet */
+.co-edge[data-layer-go='toolbox'] {
+  --co-from: 100%;
+  right: 0;
+  padding-left: calc(var(--co-line) + var(--co-cast));
+  background:
+    linear-gradient(#000, #000) left / var(--co-line) 100% no-repeat,
+    repeating-conic-gradient(#000 0 25%, transparent 0 50%) left var(--co-line) top 0 / 4px 4px repeat-y,
+    linear-gradient(rgb(255 212 138 / 0.08), rgb(255 212 138 / 0.08)),
+    #221c30;
+}
+.co-edge[data-layer-go='bench'] {
+  --co-from: -100%;
+  left: 0;
+  padding-right: calc(var(--co-line) + var(--co-cast));
+  background:
+    linear-gradient(#000, #000) right / var(--co-line) 100% no-repeat,
+    repeating-conic-gradient(#000 0 25%, transparent 0 50%) right var(--co-line) top 0 / 4px 4px repeat-y,
+    linear-gradient(rgb(255 212 138 / 0.12), rgb(255 212 138 / 0.12)),
+    #1b1626;
+}
+.ch-cocreate[data-layer='bench']:not(.is-swapping) > .co-edge[data-layer-go='toolbox'],
+.ch-cocreate[data-layer='toolbox']:not(.is-swapping) > .co-edge[data-layer-go='bench'] {
+  display: flex;
+  animation: co-edge-in 0.24s steps(3);
+}
+.co-edge span {
+  writing-mode: vertical-rl;
+}
+/* a pixel arrow pointing at the sheet in front: this one comes over it */
+.co-edge i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  clip-path: polygon(100% 0, 100% 100%, 12% 50%);
+  animation: co-nudge 0.9s steps(2) infinite;
+}
+.co-edge[data-layer-go='bench'] i {
+  clip-path: polygon(0 0, 0 100%, 88% 50%);
+  animation-direction: reverse;
+}
+.co-edge:hover,
+.co-edge:focus-visible {
+  width: calc(var(--co-edge) + 6px);
+  filter: brightness(1.3);
+}
+.co-edge:focus-visible {
+  outline-offset: -4px;
+}
+@keyframes co-edge-in {
+  from {
+    translate: var(--co-from) 0;
+  }
+}
+@keyframes co-nudge {
+  50% {
+    translate: -2px 0;
+  }
+}
+
+/* ---------- small screens: the edge fits inside the 16px page margin ---------- */
+@media (max-width: 820px) {
+  .ch-cocreate {
+    --co-edge: 16px;
+    --co-line: 2px;
+    --co-cast: 0px;
+  }
+  /* the compact top bar reaches both corners: the edge starts below it */
+  .co-edge {
+    top: 50px;
+    padding-top: 12px;
+    letter-spacing: 0.08em;
+  }
+  /* no room for the dithered shadow beside a 12px label */
+  .co-edge[data-layer-go='toolbox'] {
+    background:
+      linear-gradient(#000, #000) left / var(--co-line) 100% no-repeat,
+      linear-gradient(rgb(255 212 138 / 0.08), rgb(255 212 138 / 0.08)),
+      #221c30;
+  }
+  .co-edge[data-layer-go='bench'] {
+    background:
+      linear-gradient(#000, #000) right / var(--co-line) 100% no-repeat,
+      linear-gradient(rgb(255 212 138 / 0.12), rgb(255 212 138 / 0.12)),
+      #1b1626;
+  }
+  .co-edge:hover,
+  .co-edge:focus-visible {
+    width: var(--co-edge);
+  }
+  .co-switch button {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+}
+/* phone: the workbench title moves to the left so the switch can sit at the right */
+@media (max-width: 820px) and (orientation: portrait), (max-width: 639px) {
+  .ws-head {
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .co-switch button,
+  .co-edge {
+    transition: none;
+  }
+  .ch-cocreate[data-layer='bench']:not(.is-swapping) > .co-edge[data-layer-go='toolbox'],
+  .ch-cocreate[data-layer='toolbox']:not(.is-swapping) > .co-edge[data-layer-go='bench'],
+  .co-edge i {
+    animation: none;
+  }
+}

@@ -173,53 +173,159 @@
           </div>
         </section>
 
-        <!-- 03 工坊 -->
-        <section data-drop-hint="松手，把它变成 16×16" data-i18n-attr="aria-label:nav.workshop; data-drop-hint:workshop.drop" class="chapter ch-workshop" data-id="workshop" aria-label="共创工坊">
-          <div class="ws-head">
-            <p data-i18n="workshop.eyebrow" class="eyebrow pix">CO-CREATE · WORKSHOP</p>
-            <h2 data-i18n="nav.workshop" class="pix">共创工坊</h2>
-          </div>
-          <nav data-i18n-attr="aria-label:workshop.tools" class="ws-tools" aria-label="工具">
-            <button type="button" data-tool="depth"><b>01</b><span data-i18n="workshop.depth.name">色深</span></button>
-            <button type="button" data-tool="light"><b>02</b><span data-i18n="workshop.light.name">高光</span></button>
-            <button type="button" data-tool="outline"><b>03</b><span data-i18n="workshop.outline.name">描边</span></button>
-            <button type="button" data-tool="swap"><b>04</b><span data-i18n="workshop.swap.name">换色</span></button>
-            <button type="button" data-tool="scale"><b>05</b><span data-i18n="workshop.scale.name">放大</span></button>
-            <button type="button" data-tool="rotate"><b>06</b><span data-i18n="workshop.rotate.name">旋转</span></button>
-            <button type="button" data-tool="juice"><b>07</b><span data-i18n="workshop.juice.name">打击感</span></button>
-          </nav>
-          <div class="ws-stage">
-            <div class="ws-canvas-wrap" data-own-touch="">
-              <canvas class="ws-main"></canvas>
-              <canvas class="ws-fx"></canvas>
-              <i class="ws-sun" hidden></i>
+        <!-- 03 工坊: one chapter, two stacked sheets (src/chapters/workshop-layers.ts) -->
+        <section data-i18n-attr="aria-label:nav.workshop" class="chapter ch-cocreate" data-id="workshop" data-layer="bench" aria-label="共创工坊">
+          <!-- sheet 1, the workbench -->
+          <section data-drop-hint="松手，把它变成 16×16" data-i18n-attr="aria-label:layer.bench; data-drop-hint:workshop.drop" class="ch-workshop co-sheet" data-sheet="bench" aria-label="工作台">
+            <div class="ws-head">
+              <p data-i18n="workshop.eyebrow" class="eyebrow pix">CO-CREATE · WORKSHOP</p>
+              <h2 data-i18n="nav.workshop" class="pix">共创工坊</h2>
+              <div data-i18n-attr="aria-label:layer.label" class="co-switch" role="group" aria-label="切换工作台和工具箱">
+                <button data-i18n="layer.bench" type="button" data-layer-go="bench" aria-pressed="true">工作台</button>
+                <button data-i18n="nav.toolbox" type="button" data-layer-go="toolbox" aria-pressed="false">工具箱</button>
+              </div>
             </div>
-            <p class="ws-label pix dim"></p>
-            <div class="ws-extra"></div>
-          </div>
-          <div class="ws-side" data-own-touch="" data-scroll="">
-            <h3 class="ws-tool-name pix"></h3>
-            <p class="ws-tool-desc"></p>
-            <div class="ws-controls"></div>
-            <p class="ws-stat pix"></p>
-            <div class="ws-apply-row">
-              <button data-i18n="workshop.apply" type="button" class="chip ws-apply">✓ 叠加到素材</button>
-              <button data-i18n="workshop.undo" type="button" class="chip ws-undo" disabled>↶ 撤销</button>
+            <nav data-i18n-attr="aria-label:workshop.tools" class="ws-tools" aria-label="工具">
+              <button type="button" data-tool="depth"><b>01</b><span data-i18n="workshop.depth.name">色深</span></button>
+              <button type="button" data-tool="light"><b>02</b><span data-i18n="workshop.light.name">高光</span></button>
+              <button type="button" data-tool="outline"><b>03</b><span data-i18n="workshop.outline.name">描边</span></button>
+              <button type="button" data-tool="swap"><b>04</b><span data-i18n="workshop.swap.name">换色</span></button>
+              <button type="button" data-tool="scale"><b>05</b><span data-i18n="workshop.scale.name">放大</span></button>
+              <button type="button" data-tool="rotate"><b>06</b><span data-i18n="workshop.rotate.name">旋转</span></button>
+              <button type="button" data-tool="juice"><b>07</b><span data-i18n="workshop.juice.name">打击感</span></button>
+            </nav>
+            <div class="ws-stage">
+              <div class="ws-canvas-wrap" data-own-touch="">
+                <canvas class="ws-main"></canvas>
+                <canvas class="ws-fx"></canvas>
+                <i class="ws-sun" hidden></i>
+              </div>
+              <p class="ws-label pix dim"></p>
+              <div class="ws-extra"></div>
             </div>
-            <p class="ws-chain pix dim" hidden></p>
-            <p data-i18n="workshop.tray" class="dim pix ws-tray-label">换一张素材，或者用你自己的</p>
-            <div class="ws-import-row">
-              <button data-i18n="workshop.import" type="button" class="chip hot ws-import">＋ 导入图片</button>
-              <input type="file" class="ws-file" accept="image/*" hidden>
+            <div class="ws-side" data-own-touch="" data-scroll="">
+              <h3 class="ws-tool-name pix"></h3>
+              <p class="ws-tool-desc"></p>
+              <div class="ws-controls"></div>
+              <p class="ws-stat pix"></p>
+              <div class="ws-apply-row">
+                <button data-i18n="workshop.apply" type="button" class="chip ws-apply">✓ 叠加到素材</button>
+                <button data-i18n="workshop.undo" type="button" class="chip ws-undo" disabled>↶ 撤销</button>
+              </div>
+              <p class="ws-chain pix dim" hidden></p>
+              <p data-i18n="workshop.tray" class="dim pix ws-tray-label">换一张素材，或者用你自己的</p>
+              <div class="ws-import-row">
+                <button data-i18n="workshop.import" type="button" class="chip hot ws-import">＋ 导入图片</button>
+                <input type="file" class="ws-file" accept="image/*" hidden>
+              </div>
+              <p data-i18n="workshop.importNote" class="ws-import-note pix dim">拖入或粘贴也行 · 自动缩成 16×16 · 只在本地处理，不上传</p>
+              <div class="ws-tray"></div>
+              <div class="ws-export">
+                <button data-i18n="workshop.export" type="button" class="chip ws-export-big">下载 PNG</button>
+                <button data-i18n="workshop.export1x" type="button" class="chip ws-export-1x">原尺寸</button>
+              </div>
+              <p class="ws-deeper pix dim"></p>
             </div>
-            <p data-i18n="workshop.importNote" class="ws-import-note pix dim">拖入或粘贴也行 · 自动缩成 16×16 · 只在本地处理，不上传</p>
-            <div class="ws-tray"></div>
-            <div class="ws-export">
-              <button data-i18n="workshop.export" type="button" class="chip ws-export-big">下载 PNG</button>
-              <button data-i18n="workshop.export1x" type="button" class="chip ws-export-1x">原尺寸</button>
+          </section>
+          <!-- sheet 2, the toolbox: tools and resources from the community. The cards are rendered from src/data/toolbox.ts -->
+          <section data-i18n-attr="aria-label:nav.toolbox" class="ch-toolbox co-sheet" data-sheet="toolbox" aria-label="工具箱" inert>
+            <div class="tb-scroll" data-own-touch="">
+              <header class="tb-head">
+                <p data-i18n="toolbox.eyebrow" class="eyebrow pix" lang="en">TOOLBOX · COMMUNITY PICKS</p>
+                <div data-i18n-attr="aria-label:layer.label" class="co-switch" role="group" aria-label="切换工作台和工具箱">
+                  <button data-i18n="layer.bench" type="button" data-layer-go="bench" aria-pressed="false">工作台</button>
+                  <button data-i18n="nav.toolbox" type="button" data-layer-go="toolbox" aria-pressed="true">工具箱</button>
+                </div>
+                <h2 data-i18n="nav.toolbox" class="pix">工具箱</h2>
+                <p data-i18n="toolbox.intro" class="tb-intro">社区里值得一看的像素工具和资源，都收在这里。收费的会写明价格。这份清单靠大家一起补，你用着顺手的，也推荐进来。</p>
+                <a data-i18n="toolbox.suggest.go" class="chip hot tb-suggest" data-suggest="" href="https://github.com/polang233/pixel-atlas/issues/new?template=tool-suggestion.yml" target="_blank" rel="noopener">推荐工具 ↗</a>
+              </header>
+              <nav data-i18n-attr="aria-label:toolbox.jump" class="tb-jump" aria-label="跳到分类">
+                <button type="button" data-jump="featured"><span data-i18n="toolbox.cat.featured">精选</span><b></b></button>
+                <button type="button" data-jump="agent"><span data-i18n="toolbox.cat.agent">Agent 与 AI 生成</span><b></b></button>
+                <button type="button" data-jump="tools"><span data-i18n="toolbox.cat.tools">实用工具</span><b></b></button>
+                <button type="button" data-jump="assets"><span data-i18n="toolbox.cat.assets">素材与灵感</span><b></b></button>
+              </nav>
+              <section class="tb-section" data-cat="featured" aria-labelledby="tb-featured">
+                <div class="tb-section-head">
+                  <span class="tb-num" aria-hidden="true">★</span>
+                  <h3 data-i18n="toolbox.cat.featured" class="pix" id="tb-featured">精选</h3>
+                  <p data-i18n="toolbox.sub.featured">先在这儿玩一下，再去看原版</p>
+                </div>
+                <div class="tb-featured">
+                  <article class="tb-card tb-feature tb-snap" data-kind="tools" data-phase="fake">
+                    <div class="tb-snap-copy">
+                      <span data-i18n="toolbox.snap.kicker" class="tb-kicker pix">动手试试</span>
+                      <h4 data-i18n="toolbox.snap.title" class="pix">把假像素吸回网格</h4>
+                      <p data-i18n="toolbox.snap.desc">AI 画的“像素画”常常只是看着像：格子的宽度不是整数，边缘发糊，一种颜色散成上千种。下面这张是我们故意弄坏的 16×16 素材，点按钮把它修回来。</p>
+                    </div>
+                    <div class="tb-snap-stage">
+                      <button data-i18n-attr="aria-label:toolbox.snap.canvasLabel" type="button" class="tb-snap-view" aria-pressed="false" aria-label="一张被故意放大、弄糊的 16×16 素材，点击在假像素和修好的结果之间切换">
+                        <canvas class="tb-snap-fake" width="240" height="240"></canvas>
+                        <canvas class="tb-snap-out" width="16" height="16"></canvas>
+                        <i class="tb-snap-grid"></i>
+                      </button>
+                      <span class="tb-snap-tag pix" aria-hidden="true"></span>
+                      <span class="tb-snap-actual pix" hidden><canvas width="16" height="16"></canvas><span data-i18n="toolbox.snap.actual">原尺寸</span></span>
+                    </div>
+                    <div class="tb-snap-panel">
+                      <div class="tb-snap-actions">
+                        <button data-i18n="toolbox.snap.run" type="button" class="chip hot tb-snap-run">▶ 吸附到网格</button>
+                        <button data-i18n="toolbox.snap.shuffle" type="button" class="chip tb-snap-shuffle">换一张</button>
+                      </div>
+                      <label class="tb-snap-scale pix"><span data-i18n="toolbox.snap.scale">假像素大小</span><output></output><input type="range" min="6" max="14" step="0.01" value="10.24"></label>
+                      <ol data-i18n-attr="aria-label:toolbox.snap.steps" class="tb-snap-steps pix" aria-label="修复的三步">
+                        <li data-i18n="toolbox.snap.step1">量格子：顺着边缘找最强的节拍</li>
+                        <li data-i18n="toolbox.snap.step2">取样：每格只看中间，取中位数</li>
+                        <li data-i18n="toolbox.snap.step3">量化：差不多的颜色并成一种</li>
+                      </ol>
+                      <p class="tb-snap-stat pix"></p>
+                      <div data-i18n-attr="aria-label:toolbox.snap.palette" class="tb-snap-palette" role="img" aria-label="修复后的调色板"></div>
+                    </div>
+                    <div class="tb-snap-tools">
+                      <p data-i18n="toolbox.snap.note" class="tb-snap-note">这是我们自己写的简化版，只为把思路讲清楚。真要处理图片，用这两个：</p>
+                      <div class="tb-snap-links"></div>
+                    </div>
+                  </article>
+                </div>
+              </section>
+              <section class="tb-section" data-cat="agent" aria-labelledby="tb-agent">
+                <div class="tb-section-head">
+                  <span class="tb-num" aria-hidden="true">01</span>
+                  <h3 data-i18n="toolbox.cat.agent" class="pix" id="tb-agent">Agent 与 AI 生成</h3>
+                  <p data-i18n="toolbox.sub.agent">让 Agent（智能体）自己画、自己检查、自己返工，还有专门生成像素画的模型</p>
+                </div>
+                <div class="tb-grid"></div>
+              </section>
+              <section class="tb-section" data-cat="tools" aria-labelledby="tb-tools">
+                <div class="tb-section-head">
+                  <span class="tb-num" aria-hidden="true">02</span>
+                  <h3 data-i18n="toolbox.cat.tools" class="pix" id="tb-tools">实用工具</h3>
+                  <p data-i18n="toolbox.sub.tools">编辑器、转换器，还有把 AI 图修成真像素的小工具</p>
+                </div>
+                <div class="tb-grid"></div>
+              </section>
+              <section class="tb-section" data-cat="assets" aria-labelledby="tb-assets">
+                <div class="tb-section-head">
+                  <span class="tb-num" aria-hidden="true">03</span>
+                  <h3 data-i18n="toolbox.cat.assets" class="pix" id="tb-assets">素材与灵感</h3>
+                  <p data-i18n="toolbox.sub.assets">调色板、素材库，和能逛上一整天的画廊</p>
+                </div>
+                <div class="tb-grid"></div>
+              </section>
+              <footer class="tb-foot">
+                <div class="tb-cta">
+                  <h3 data-i18n="toolbox.suggest.title" class="pix">少了你常用的那个？</h3>
+                  <p data-i18n="toolbox.suggest.desc">共创工坊的“共创”，就从这份清单开始。填一张很短的表：它是什么、好在哪、要不要钱。核实之后我们会把它加进来。</p>
+                  <a data-i18n="toolbox.suggest.go" class="pix" data-suggest="" href="https://github.com/polang233/pixel-atlas/issues/new?template=tool-suggestion.yml" target="_blank" rel="noopener">推荐工具 ↗</a>
+                </div>
+                <p class="tb-checked pix"><span class="tb-checked-date"></span> · <span data-i18n="toolbox.disclaimer">价格和功能会变，以各自官网为准。本站和这些工具的作者没有合作或赞助关系。</span></p>
+              </footer>
             </div>
-            <p class="ws-deeper pix dim"></p>
-          </div>
+          </section>
+          <!-- the edge of whichever sheet is behind: the toolbox shows on the right, the workbench on the left -->
+          <button type="button" class="co-edge" data-layer-go="toolbox"><i aria-hidden="true"></i><span data-i18n="nav.toolbox">工具箱</span></button>
+          <button type="button" class="co-edge" data-layer-go="bench"><i aria-hidden="true"></i><span data-i18n="layer.bench">工作台</span></button>
         </section>
 
         <!-- 04 地牢 -->

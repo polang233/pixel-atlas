@@ -8,7 +8,9 @@ import { createHero } from './chapters/hero'
 import { createNeon } from './chapters/neon'
 import { createOcean } from './chapters/ocean'
 import { createOutro } from './chapters/outro'
+import { createToolbox } from './chapters/toolbox'
 import { createWorkshop } from './chapters/workshop'
+import { createWorkshopLayers, type Layer } from './chapters/workshop-layers'
 import { initRepoStars } from './gh-stars'
 import { initLocale, type MessageKey, onLocaleChange, t } from './i18n'
 import { initLanguageSwitch } from './i18n/switch'
@@ -32,12 +34,37 @@ async function boot() {
   const names = ['depth', 'crt', 'workshop', 'dungeon', 'ocean', 'neon', 'cthulhu'] as const
   const strips = Object.fromEntries(await Promise.all(names.map(async (n) => [n, await loadStrip(n)] as const))) as Record<(typeof names)[number], Sprite[]>
 
-  let goTo: (i: number) => Promise<void> = async () => {}
-  const workshop = createWorkshop(section('workshop'), strips.workshop)
+  let goTo: (i: number, layer?: Layer) => Promise<void> = async () => {}
+  // The workshop chapter is two stacked sheets, the workbench and the toolbox. The toolbox scrolls
+  // its own panel; a drag past either end comes back here as ordinary scroll input.
+  const coCreate = section('workshop')
+  const workshop = createWorkshopLayers(
+    coCreate,
+    createWorkshop(coCreate.querySelector<HTMLElement>('.ch-workshop')!, strips.workshop),
+    createToolbox(coCreate.querySelector<HTMLElement>('.ch-toolbox')!, [...strips.crt, ...strips.workshop], (delta) => input(delta)),
+    {
+      // swapping the sheets is a page turn too: it holds the pager until the new one has landed
+      begin() {
+        if (busy) return false
+        busy = true
+        armedUntil = 0
+        nextbar.hidden = true
+        return true
+      },
+      change: () => updateHud(),
+      end() {
+        busy = false
+        edgeAcc = 0
+        cooldownUntil = performance.now() + 650
+      },
+    },
+  )
+  /** the workshop chapter on one of its sheets, from wherever you are */
+  const openWorkshop = (layer: Layer) => (chapters[index] === workshop ? workshop.show(layer) : goTo(chapters.indexOf(workshop), layer))
   const hero = await createHero(section('hero'), {
     toWorkshop(sprite, info) {
       workshop.load(sprite, info.caption)
-      goTo(chapters.indexOf(workshop))
+      openWorkshop('bench')
     },
   })
   const worlds: Chapter[] = [
@@ -65,6 +92,7 @@ async function boot() {
 
   const AREAS: Area[] = ['hero', 'worlds', 'workshop', 'outro']
   const AREA_NAME: Record<Area, MessageKey> = { hero: 'nav.atlas', worlds: 'nav.worlds', workshop: 'nav.workshop', outro: 'nav.get' }
+  const LAYER_NAME: Record<Layer, MessageKey> = { bench: 'layer.bench', toolbox: 'nav.toolbox' }
   const nextbar = $<HTMLButtonElement>('.nextbar')
   const nextLabel = nextbar.querySelector<HTMLElement>('.nb-label')!
   const nextName = nextbar.querySelector<HTMLElement>('b')!
@@ -110,7 +138,9 @@ async function boot() {
   navButtons.forEach((b, i) => {
     b.addEventListener('click', () => {
       const go = b.dataset.go as Area
-      goTo(go === 'worlds' ? lastWorld : chapters.findIndex((c) => c.id === go))
+      // the workshop button always means the workbench, also when its toolbox is the sheet on screen
+      if (go === 'workshop') openWorkshop('bench')
+      else goTo(go === 'worlds' ? lastWorld : chapters.findIndex((c) => c.id === go))
     })
     b.addEventListener('pointerenter', () => sound.tick(1500 + i * 160, 0.014))
   })
@@ -144,6 +174,8 @@ async function boot() {
     workshop: 'hud.hint.workshop',
     outro: 'hud.hint.outroHtml',
   } as const
+  /** the sheet of the workshop that is on screen, or null on any other chapter */
+  const layerNow = () => (chapters[index] === workshop ? workshop.layer() : null)
 
   function updateHud() {
     const c = chapters[index]
@@ -155,11 +187,15 @@ async function boot() {
       b.setAttribute('aria-current', String(worlds[k] === c))
     })
     worldbar.hidden = area !== 'worlds'
-    if (area === 'workshop') hudHint.textContent = t(HINTS[area])
+    const onToolbox = layerNow() === 'toolbox'
+    if (onToolbox) hudHint.innerHTML = t('hud.hint.toolboxHtml')
+    else if (area === 'workshop') hudHint.textContent = t(HINTS[area])
     else hudHint.innerHTML = t(HINTS[area])
     document.body.dataset.chapter = c.id
     document.body.dataset.area = area
-    if (location.hash.slice(1) !== c.id) history.replaceState(null, '', `#${c.id}`)
+    // the toolbox sheet keeps the address it had as a chapter of its own
+    const hash = onToolbox ? 'toolbox' : c.id
+    if (location.hash.slice(1) !== hash) history.replaceState(null, '', `#${hash}`)
   }
 
   onLocaleChange(() => {
@@ -169,12 +205,22 @@ async function boot() {
   })
 
   // ---- "there is more this way": the hand-off between the big sections --------------------
-  /** the section before / after the one on screen, and the chapter you would land on */
-  function neighbour(dir: 1 | -1) {
+  /** the stop before / after the one on screen: what it is called, and how to get there */
+  function neighbour(dir: 1 | -1): { name: MessageKey; go: () => void } | null {
+    // inside the workshop the next stop can be its other sheet: the toolbox below the workbench
+    const other: Layer = dir === 1 ? 'toolbox' : 'bench'
+    if (chapters[index] === workshop && workshop.layer() !== other) return { name: LAYER_NAME[other], go: () => workshop.show(other) }
     const area = AREAS[AREAS.indexOf(areaOf(chapters[index])) + dir]
     if (!area) return null
     const to = area === 'worlds' ? (dir === 1 ? 1 : worlds.length) : chapters.findIndex((c) => c.id === area)
-    return { area, to }
+    // going back into the workshop lands on its last sheet, the toolbox: say so
+    return { name: area === 'workshop' && dir === -1 ? LAYER_NAME.toolbox : AREA_NAME[area], go: () => goTo(to) }
+  }
+  /** the name of the page that has just been scrolled to its end; null for pages with nothing to scroll */
+  function readName(): MessageKey | null {
+    const c = chapters[index]
+    if (c === workshop) return workshop.layer() === 'toolbox' ? LAYER_NAME.toolbox : null
+    return c.atEnd ? AREA_NAME[areaOf(c)] : null
   }
   /** is the chapter on screen the last (dir 1) or first (dir -1) page of its section? */
   function atSectionEdge(dir: 1 | -1) {
@@ -189,16 +235,17 @@ async function boot() {
     nextbar.hidden = false
     nextbar.dataset.dir = String(dir)
     nextbar.classList.toggle('is-charging', progress > 0 || armed)
+    const read = readName()
     nextLabel.textContent = armed
       ? t('nav.pressAgain', { key: dir === 1 ? '↓' : '↑' })
       : dir === 1
         ? progress > 0
           ? t('nav.scrollOn')
-          : chapters[index].atEnd
-            ? t('nav.finished', { area: t(AREA_NAME[areaOf(chapters[index])]) })
+          : read
+            ? t('nav.finished', { area: t(read) })
             : t('nav.nextStop')
         : t('nav.scrollBack')
-    nextName.textContent = t(AREA_NAME[n.area])
+    nextName.textContent = t(n.name)
     nextFill.style.transform = `scaleX(${armed ? 1 : Math.min(1, progress)})`
   }
   /** resting state: a quiet pointer onward whenever the current section has nothing left to scroll */
@@ -221,7 +268,7 @@ async function boot() {
     if (Math.abs(edgeAcc) >= EDGE) {
       edgeAcc = 0
       sound.select()
-      goTo(n.to)
+      n.go()
       return
     }
     sound.tick(900 + (Math.abs(edgeAcc) / EDGE) * 900, 0.01)
@@ -235,7 +282,7 @@ async function boot() {
     if (now < armedUntil && dir === edgeDir) {
       armedUntil = 0
       sound.select()
-      goTo(n.to)
+      n.go()
       return
     }
     edgeDir = dir
@@ -246,8 +293,7 @@ async function boot() {
     edgeTimer = window.setTimeout(restNext, 2600)
   }
   nextbar.addEventListener('click', () => {
-    const n = neighbour(Number(nextbar.dataset.dir) === -1 ? -1 : 1)
-    if (n) goTo(n.to)
+    neighbour(Number(nextbar.dataset.dir) === -1 ? -1 : 1)?.go()
   })
   window.setInterval(() => {
     if (edgeAcc === 0 && performance.now() > armedUntil) restNext()
@@ -279,11 +325,13 @@ async function boot() {
     nextbar.hidden = true
   }
 
-  goTo = async (i: number) => {
+  goTo = async (i: number, layer?: Layer) => {
     if (busy || i === index || i < 0 || i >= chapters.length) return
     busy = true
     const dir: 1 | -1 = i > index ? 1 : -1
     const target = chapters[i]
+    // the workshop is entered from its near side unless a sheet was asked for: the workbench on the way down, the toolbox on the way back up
+    if (target === workshop) workshop.place(layer ?? (dir === 1 ? 'bench' : 'toolbox'))
     ;(document.activeElement as HTMLElement | null)?.blur?.()
     await runTransition(reducedMotion ? 'fade' : target.transition, {
       color: target.color,
@@ -408,15 +456,23 @@ async function boot() {
     e.preventDefault()
     goTo(0)
   })
+  // #toolbox is the workshop chapter with its toolbox sheet in front; #workshop is its workbench
+  const hashLayer = (): Layer | null => (location.hash === '#toolbox' ? 'toolbox' : location.hash === '#workshop' ? 'bench' : null)
   window.addEventListener('hashchange', () => {
+    const layer = hashLayer()
+    if (layer) return openWorkshop(layer)
     const i = chapters.findIndex((c) => c.id === location.hash.slice(1))
     if (i >= 0) goTo(i)
   })
 
-  const start = Math.max(
-    0,
-    chapters.findIndex((c) => c.id === location.hash.slice(1)),
-  )
+  const startLayer = hashLayer()
+  if (startLayer) workshop.place(startLayer)
+  const start = startLayer
+    ? chapters.indexOf(workshop)
+    : Math.max(
+        0,
+        chapters.findIndex((c) => c.id === location.hash.slice(1)),
+      )
   index = start
   if (areaOf(chapters[start]) === 'worlds') lastWorld = start
   chapters.forEach((c, i) => {

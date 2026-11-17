@@ -1,0 +1,60 @@
+name: Tool suggestion (推荐工具)
+description: Recommend a pixel-art tool or resource for the Toolbox (给工具箱推荐一个像素工具或资源)
+title: "Toolbox: "
+labels: [toolbox]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Name (名称)
+      placeholder: Aseprite
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Link (链接)
+      description: The official site or repository. (官网或仓库地址)
+      placeholder: https://www.aseprite.org
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category (分类)
+      options:
+        - Agent / AI workflows (Agent 与 AI 生成)
+        - Tools (实用工具)
+        - Assets & inspiration (素材与灵感)
+        - Not sure (不确定)
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What it does, and why it is good (它是做什么的，好在哪)
+      description: A sentence or two is enough. Tell us if you have used it yourself. (一两句话就够，用过的话说说体验)
+    validations:
+      required: true
+  - type: input
+    id: price
+    attributes:
+      label: Price and licence (价格和许可)
+      description: Paid tools are welcome; the Toolbox always shows what they cost. (收费工具也欢迎，工具箱会如实标出价格)
+      placeholder: Free / open source, MIT / about $20 once / from $8 a month
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: Does the creator say AI was involved? (作者是否说明用了 AI)
+      description: For assets and art. The Toolbox shows an "AI-assisted" tag only where the creator says so. (针对素材和作品；只有作者自己说明的，才会标“AI 辅助”)
+      options:
+        - Not applicable / not stated (不适用或没有说明)
+        - Yes, the creator says so (是，作者有说明)
+        - No, made without AI (否，没有用 AI)
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else (补充)
+      description: Optional. A post, a demo, a screenshot, or your relation to the project if you have one. (可选：相关帖子、演示、截图；如果你是作者或有利益关系，也请说明)

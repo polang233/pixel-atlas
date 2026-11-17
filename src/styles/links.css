@@ -43,6 +43,9 @@
   margin-left: 6px;
   opacity: 1;
 }
+.tb-repo.is-open > .gh-stars {
+  color: var(--gold);
+}
 @media (prefers-reduced-motion: reduce) {
   .gh-stars {
     transition: none;
