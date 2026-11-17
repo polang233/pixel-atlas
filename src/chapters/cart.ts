@@ -123,8 +123,9 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     PX = Math.max(2, Math.round(canvas.clientWidth / 430))
     W = Math.ceil(canvas.clientWidth / PX)
     H = Math.ceil(canvas.clientHeight / PX)
-    canvas.width = W
-    canvas.height = H
+    // assigning a canvas size clears it, even to the same value: only do it when it really changes
+    if (canvas.width !== W) canvas.width = W
+    if (canvas.height !== H) canvas.height = H
     const canvasRect = canvas.getBoundingClientRect()
     const hudRect = el.querySelector<HTMLElement>('.game-hud:not([hidden])')?.getBoundingClientRect()
     // Phones put the HUD above the jar, everything else below it: go by where it actually is.
@@ -592,14 +593,17 @@ export function createCart(el: HTMLElement, sprites: Sprite[]): Chapter {
     },
   })
   const gameHud = el.querySelector<HTMLElement>('.game-hud')!
-  const layoutObserver = new ResizeObserver(() => {
-    if (g.on) resize()
-  })
+  // These fire between frames (e.g. when the score gains a digit and the HUD gets wider), so redraw
+  // straight away: a canvas resized here would otherwise be painted blank until the next frame.
+  const relayout = () => {
+    if (!g.on) return
+    resize()
+    draw()
+  }
+  const layoutObserver = new ResizeObserver(relayout)
   layoutObserver.observe(canvas)
   layoutObserver.observe(gameHud)
-  gameHud.addEventListener('animationend', () => {
-    if (g.on) resize()
-  })
+  gameHud.addEventListener('animationend', relayout)
   const KEYMAP: Record<string, string> = { ArrowLeft: 'l', a: 'l', A: 'l', ArrowRight: 'r', d: 'r', D: 'r' }
   window.addEventListener('keydown', (e) => {
     if (!g.on) return
