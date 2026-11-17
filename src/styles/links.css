@@ -1,19 +1,52 @@
 /* ===== repo and contact links ===== */
 .gh-link {
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
   height: 30px;
+  padding: 0 7px;
   color: var(--paper);
+  text-decoration: none;
   background: rgb(7 6 12 / 0.72);
   border: 2px solid rgb(255 255 255 / 0.14);
+  transition:
+    color 0.1s steps(2),
+    border-color 0.1s steps(2);
 }
-.gh-link:hover {
+.gh-link:hover,
+.gh-link.is-open {
   color: var(--gold);
   border-color: var(--gold);
 }
 .gh-link svg {
   display: block;
+  flex: none;
+}
+/* the star count slides out of the button itself, widening it in pixel steps */
+.gh-stars {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1;
+  vertical-align: middle;
+  opacity: 0;
+  transition:
+    max-width 0.18s steps(4),
+    margin 0.18s steps(4),
+    opacity 0.18s steps(2);
+}
+.is-open > .gh-stars {
+  max-width: 9em;
+  margin-left: 6px;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gh-stars {
+    transition: none;
+  }
 }
 html.bare .gh-link {
   display: none !important;

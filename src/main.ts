@@ -9,6 +9,7 @@ import { createNeon } from './chapters/neon'
 import { createOcean } from './chapters/ocean'
 import { createOutro } from './chapters/outro'
 import { createWorkshop } from './chapters/workshop'
+import { initRepoStars } from './gh-stars'
 import { initLocale, type MessageKey, onLocaleChange, t } from './i18n'
 import { initLanguageSwitch } from './i18n/switch'
 import { loadStrip, type Sprite } from './sprites'
@@ -18,6 +19,7 @@ import { reducedMotion } from './types'
 
 initLocale()
 initLanguageSwitch()
+initRepoStars(document.querySelector<HTMLAnchorElement>('.gh-link')!, 'polang233/pixel-atlas')
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!
 const section = (id: string) => $<HTMLElement>(`.chapter[data-id="${id}"]`)

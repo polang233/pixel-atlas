@@ -12,6 +12,8 @@ export const zh = {
   'nav.workshop': '共创工坊',
   'nav.get': '获取',
   'nav.github': 'GitHub 仓库',
+  'gh.stars': '★ {n}',
+  'gh.stars.unknown': '★ GitHub',
   'sound.unlock': '点我开声音',
   'nav.prevWorld': '上一个世界',
   'nav.nextWorld': '下一个世界',

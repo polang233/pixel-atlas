@@ -182,3 +182,16 @@ body.is-playing-game .worldbar,
 body.is-playing-game .hud-bottom {
   display: none;
 }
+/* On wide screens the nav is centred on the page rather than between its neighbours, so the repo
+   button widening to show its star count doesn't nudge the nav sideways. */
+@media (min-width: 1001px) {
+  .topnav {
+    position: absolute;
+    left: 50%;
+    translate: -50% 0;
+    margin: 0;
+  }
+  .topbar-tools {
+    margin-left: auto;
+  }
+}

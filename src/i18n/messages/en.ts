@@ -15,6 +15,8 @@ export const en = defineMessages({
   'nav.workshop': 'Workshop',
   'nav.get': 'Get',
   'nav.github': 'GitHub repository',
+  'gh.stars': '★ {n}',
+  'gh.stars.unknown': '★ GitHub',
   'sound.unlock': 'Click for sound',
   'nav.prevWorld': 'Previous world',
   'nav.nextWorld': 'Next world',
